@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>World Cup 2026 — Prediction Contest Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --line: #30363d;
+    --text: #e6edf3; --muted: #8b949e; --accent: #2f81f7;
+    --gold: #d4af37; --silver: #aab2bd; --bronze: #cd7f32;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  }
+  header {
+    padding: 24px 32px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+  }
+  header h1 { margin: 0; font-size: 22px; }
+  header .meta { color: var(--muted); font-size: 13px; }
+  main { padding: 24px 32px; max-width: 1200px; margin: 0 auto; }
+  .grid { display: grid; gap: 20px; grid-template-columns: 1fr 1fr; }
+  @media (max-width: 880px) { .grid { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--card); border: 1px solid var(--line);
+    border-radius: 12px; padding: 18px 20px;
+  }
+  .card h2 { margin: 0 0 14px; font-size: 15px; font-weight: 600; color: var(--muted);
+             text-transform: uppercase; letter-spacing: .04em; }
+  .span2 { grid-column: 1 / -1; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px;
+       text-transform: uppercase; letter-spacing: .03em; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  tr:last-child td { border-bottom: none; }
+  .rank { font-weight: 700; width: 36px; }
+  .r1 { color: var(--gold); } .r2 { color: var(--silver); } .r3 { color: var(--bronze); }
+  .total { font-weight: 700; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:999px;
+          background:#21262d; color:var(--muted); font-size:12px; }
+  .empty { color: var(--muted); padding: 24px 0; text-align:center; }
+  canvas { max-height: 340px; }
+  footer { color: var(--muted); font-size: 12px; padding: 16px 32px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>⚽ World Cup 2026 — Prediction Contest</h1>
+  <span class="meta" id="meta"></span>
+</header>
+<main>
+  <div class="grid">
+    <div class="card span2">
+      <h2>Leaderboard</h2>
+      <div id="leaderboard"></div>
+    </div>
+    <div class="card span2">
+      <h2>Points over time</h2>
+      <canvas id="timeline"></canvas>
+    </div>
+    <div class="card">
+      <h2>Points by category (top 10)</h2>
+      <canvas id="breakdown"></canvas>
+    </div>
+    <div class="card">
+      <h2>Latest results</h2>
+      <div id="results"></div>
+    </div>
+  </div>
+</main>
+<footer>
+  Static dashboard — regenerate <code>data.json</code> from the app's Admin tab
+  (or <code>uv run python -m wc_contest.export</code>) after each match-day.
+  Last generated: <span id="gen"></span>
+</footer>
+
+<script>
+const PALETTE = ["#2f81f7","#3fb950","#d29922","#db61a2","#a371f7","#f85149",
+  "#56d4dd","#e3b341","#7ee787","#ff7b72","#79c0ff","#ffa657","#d2a8ff","#39d353"];
+
+async function load() {
+  let data;
+  try {
+    const res = await fetch("data.json", {cache: "no-store"});
+    data = await res.json();
+  } catch (e) {
+    document.getElementById("leaderboard").innerHTML =
+      '<div class="empty">Could not load data.json. Generate it from the Admin tab first.</div>';
+    return;
+  }
+  renderMeta(data);
+  renderLeaderboard(data.leaderboard || []);
+  renderTimeline(data.timeline || {});
+  renderBreakdown(data.category_breakdown || []);
+  renderResults(data.matches || []);
+}
+
+function renderMeta(d) {
+  const m = d.meta || {};
+  document.getElementById("meta").textContent =
+    `${m.participants||0} players · ${m.matches_played||0}/${m.matches_total||0} matches played`;
+  document.getElementById("gen").textContent = d.generated_at || "—";
+}
+
+function renderLeaderboard(rows) {
+  const el = document.getElementById("leaderboard");
+  if (!rows.length) { el.innerHTML = '<div class="empty">No participants yet.</div>'; return; }
+  let h = `<table><thead><tr><th class="rank">#</th><th>Player</th>
+    <th class="num">Total</th><th class="num">Match</th><th class="num">Outcomes</th>
+    <th class="num">Wildcards</th><th class="num">Exact</th></tr></thead><tbody>`;
+  for (const r of rows) {
+    const rc = r.rank<=3 ? `r${r.rank}` : "";
+    h += `<tr><td class="rank ${rc}">${r.rank}</td><td>${esc(r.name)}</td>
+      <td class="num total">${r.total_points}</td>
+      <td class="num">${r.match_points}</td>
+      <td class="num">${r.outcome_points}</td>
+      <td class="num">${r.wildcard_points}</td>
+      <td class="num">${r.exact_score_hits}</td></tr>`;
+  }
+  el.innerHTML = h + "</tbody></table>";
+}
+
+function renderTimeline(timeline) {
+  const names = Object.keys(timeline);
+  const ctx = document.getElementById("timeline");
+  if (!names.length) { blank(ctx, "No scored matches yet."); return; }
+  const dates = [...new Set(names.flatMap(n => timeline[n].map(p => p.date)))].sort();
+  const datasets = names.map((n, i) => {
+    const map = Object.fromEntries(timeline[n].map(p => [p.date, p.y]));
+    let last = 0;
+    const series = dates.map(d => { if (d in map) last = map[d]; return last; });
+    return { label: n, data: series, borderColor: PALETTE[i%PALETTE.length],
+             backgroundColor: PALETTE[i%PALETTE.length], tension: .25,
+             pointRadius: 2, borderWidth: 2 };
+  });
+  new Chart(ctx, { type: "line",
+    data: { labels: dates, datasets },
+    options: { responsive: true, interaction: {mode:"index", intersect:false},
+      plugins: { legend: { labels: { color: "#e6edf3", boxWidth: 12 } } },
+      scales: { x: { ticks:{color:"#8b949e"}, grid:{color:"#21262d"} },
+                y: { ticks:{color:"#8b949e"}, grid:{color:"#21262d"} } } } });
+}
+
+function renderBreakdown(rows) {
+  const ctx = document.getElementById("breakdown");
+  if (!rows.length) { blank(ctx, "No scores yet."); return; }
+  const top = rows.slice(0, 10);
+  new Chart(ctx, { type: "bar",
+    data: { labels: top.map(r=>r.name),
+      datasets: [
+        {label:"Match", data: top.map(r=>r.match), backgroundColor: PALETTE[0]},
+        {label:"Outcomes", data: top.map(r=>r.outcome), backgroundColor: PALETTE[1]},
+        {label:"Wildcards", data: top.map(r=>r.wildcard), backgroundColor: PALETTE[2]},
+      ]},
+    options: { responsive: true,
+      plugins: { legend: { labels: { color:"#e6edf3", boxWidth:12 } } },
+      scales: { x: { stacked:true, ticks:{color:"#8b949e"}, grid:{display:false} },
+                y: { stacked:true, ticks:{color:"#8b949e"}, grid:{color:"#21262d"} } } } });
+}
+
+function renderResults(matches) {
+  const el = document.getElementById("results");
+  if (!matches.length) { el.innerHTML = '<div class="empty">No results entered yet.</div>'; return; }
+  const recent = matches.slice(-12).reverse();
+  let h = "<table><tbody>";
+  for (const m of recent) {
+    h += `<tr><td><span class="pill">${esc(m.stage)}${m.group_code? " "+m.group_code:""}</span></td>
+      <td style="text-align:right">${esc(m.home_team)}</td>
+      <td class="num total">${m.home_goals} – ${m.away_goals}</td>
+      <td>${esc(m.away_team)}</td></tr>`;
+  }
+  el.innerHTML = h + "</tbody></table>";
+}
+
+function blank(ctx, msg) {
+  ctx.replaceWith(Object.assign(document.createElement("div"),
+    {className:"empty", textContent: msg}));
+}
+function esc(s){ return String(s).replace(/[&<>]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c])); }
+load();
+</script>
+</body>
+</html>

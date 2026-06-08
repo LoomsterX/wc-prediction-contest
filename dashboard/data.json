@@ -1,0 +1,35 @@
+{
+  "generated_at": "SAMPLE PREVIEW — overwritten on first real export",
+  "meta": {
+    "participants": 5,
+    "matches_total": 104,
+    "matches_played": 4
+  },
+  "leaderboard": [
+    {"rank": 1, "participant_id": 1, "name": "Sondre", "total_points": 18, "match_points": 15, "outcome_points": 0, "wildcard_points": 3, "exact_score_hits": 2},
+    {"rank": 2, "participant_id": 2, "name": "Ingrid", "total_points": 14, "match_points": 14, "outcome_points": 0, "wildcard_points": 0, "exact_score_hits": 1},
+    {"rank": 3, "participant_id": 3, "name": "Lars", "total_points": 11, "match_points": 11, "outcome_points": 0, "wildcard_points": 0, "exact_score_hits": 1},
+    {"rank": 4, "participant_id": 4, "name": "Mette", "total_points": 9, "match_points": 9, "outcome_points": 0, "wildcard_points": 0, "exact_score_hits": 0},
+    {"rank": 5, "participant_id": 5, "name": "Jonas", "total_points": 5, "match_points": 5, "outcome_points": 0, "wildcard_points": 0, "exact_score_hits": 0}
+  ],
+  "timeline": {
+    "Sondre": [{"date": "2026-06-11", "y": 7}, {"date": "2026-06-12", "y": 18}],
+    "Ingrid": [{"date": "2026-06-11", "y": 5}, {"date": "2026-06-12", "y": 14}],
+    "Lars": [{"date": "2026-06-11", "y": 3}, {"date": "2026-06-12", "y": 11}],
+    "Mette": [{"date": "2026-06-11", "y": 4}, {"date": "2026-06-12", "y": 9}],
+    "Jonas": [{"date": "2026-06-11", "y": 2}, {"date": "2026-06-12", "y": 5}]
+  },
+  "matches": [
+    {"match_id": "GAM11", "stage": "Group", "group_code": "A", "matchday": 1, "kickoff_utc": "2026-06-11T18:00:00+00:00", "date": "2026-06-11", "home_team": "Mexico", "away_team": "South Africa", "is_knockout": 0, "home_goals": 2, "away_goals": 1, "played": 1},
+    {"match_id": "GAM12", "stage": "Group", "group_code": "A", "matchday": 1, "kickoff_utc": "2026-06-11T18:00:00+00:00", "date": "2026-06-11", "home_team": "South Korea", "away_team": "Czech Republic", "is_knockout": 0, "home_goals": 0, "away_goals": 0, "played": 1},
+    {"match_id": "GBM11", "stage": "Group", "group_code": "B", "matchday": 1, "kickoff_utc": "2026-06-12T18:00:00+00:00", "date": "2026-06-12", "home_team": "Canada", "away_team": "Bosnia and Herzegovina", "is_knockout": 0, "home_goals": 1, "away_goals": 2, "played": 1},
+    {"match_id": "GDM11", "stage": "Group", "group_code": "D", "matchday": 1, "kickoff_utc": "2026-06-12T18:00:00+00:00", "date": "2026-06-12", "home_team": "United States", "away_team": "Paraguay", "is_knockout": 0, "home_goals": 3, "away_goals": 1, "played": 1}
+  ],
+  "category_breakdown": [
+    {"name": "Sondre", "match": 15, "outcome": 0, "wildcard": 3},
+    {"name": "Ingrid", "match": 14, "outcome": 0, "wildcard": 0},
+    {"name": "Lars", "match": 11, "outcome": 0, "wildcard": 0},
+    {"name": "Mette", "match": 9, "outcome": 0, "wildcard": 0},
+    {"name": "Jonas", "match": 5, "outcome": 0, "wildcard": 0}
+  ]
+}

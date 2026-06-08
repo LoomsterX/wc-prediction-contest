@@ -1,0 +1,105 @@
+match_id,stage,group_code,matchday,kickoff_utc,home_team_id,away_team_id,home_label,away_label,is_knockout
+GAM11,Group,A,1,2026-06-11T18:00:00+00:00,1,2,Mexico,South Africa,0
+GAM12,Group,A,1,2026-06-11T18:00:00+00:00,3,4,South Korea,Czech Republic,0
+GAM21,Group,A,2,2026-06-15T18:00:00+00:00,1,3,Mexico,South Korea,0
+GAM22,Group,A,2,2026-06-15T18:00:00+00:00,4,2,Czech Republic,South Africa,0
+GAM31,Group,A,3,2026-06-19T18:00:00+00:00,2,3,South Africa,South Korea,0
+GAM32,Group,A,3,2026-06-19T18:00:00+00:00,4,1,Czech Republic,Mexico,0
+GBM11,Group,B,1,2026-06-12T18:00:00+00:00,5,6,Canada,Bosnia and Herzegovina,0
+GBM12,Group,B,1,2026-06-12T18:00:00+00:00,7,8,Qatar,Switzerland,0
+GBM21,Group,B,2,2026-06-16T18:00:00+00:00,5,7,Canada,Qatar,0
+GBM22,Group,B,2,2026-06-16T18:00:00+00:00,8,6,Switzerland,Bosnia and Herzegovina,0
+GBM31,Group,B,3,2026-06-20T18:00:00+00:00,6,7,Bosnia and Herzegovina,Qatar,0
+GBM32,Group,B,3,2026-06-20T18:00:00+00:00,8,5,Switzerland,Canada,0
+GCM11,Group,C,1,2026-06-13T18:00:00+00:00,9,10,Brazil,Morocco,0
+GCM12,Group,C,1,2026-06-13T18:00:00+00:00,11,12,Haiti,Scotland,0
+GCM21,Group,C,2,2026-06-17T18:00:00+00:00,9,11,Brazil,Haiti,0
+GCM22,Group,C,2,2026-06-17T18:00:00+00:00,12,10,Scotland,Morocco,0
+GCM31,Group,C,3,2026-06-21T18:00:00+00:00,10,11,Morocco,Haiti,0
+GCM32,Group,C,3,2026-06-21T18:00:00+00:00,12,9,Scotland,Brazil,0
+GDM11,Group,D,1,2026-06-12T18:00:00+00:00,13,14,United States,Paraguay,0
+GDM12,Group,D,1,2026-06-12T18:00:00+00:00,15,16,Australia,Turkey,0
+GDM21,Group,D,2,2026-06-16T18:00:00+00:00,13,15,United States,Australia,0
+GDM22,Group,D,2,2026-06-16T18:00:00+00:00,16,14,Turkey,Paraguay,0
+GDM31,Group,D,3,2026-06-20T18:00:00+00:00,14,15,Paraguay,Australia,0
+GDM32,Group,D,3,2026-06-20T18:00:00+00:00,16,13,Turkey,United States,0
+GEM11,Group,E,1,2026-06-14T18:00:00+00:00,17,18,Germany,Curaçao,0
+GEM12,Group,E,1,2026-06-14T18:00:00+00:00,19,20,Ivory Coast,Ecuador,0
+GEM21,Group,E,2,2026-06-18T18:00:00+00:00,17,19,Germany,Ivory Coast,0
+GEM22,Group,E,2,2026-06-18T18:00:00+00:00,20,18,Ecuador,Curaçao,0
+GEM31,Group,E,3,2026-06-22T18:00:00+00:00,18,19,Curaçao,Ivory Coast,0
+GEM32,Group,E,3,2026-06-22T18:00:00+00:00,20,17,Ecuador,Germany,0
+GFM11,Group,F,1,2026-06-14T18:00:00+00:00,21,22,Netherlands,Japan,0
+GFM12,Group,F,1,2026-06-14T18:00:00+00:00,23,24,Sweden,Tunisia,0
+GFM21,Group,F,2,2026-06-18T18:00:00+00:00,21,23,Netherlands,Sweden,0
+GFM22,Group,F,2,2026-06-18T18:00:00+00:00,24,22,Tunisia,Japan,0
+GFM31,Group,F,3,2026-06-22T18:00:00+00:00,22,23,Japan,Sweden,0
+GFM32,Group,F,3,2026-06-22T18:00:00+00:00,24,21,Tunisia,Netherlands,0
+GGM11,Group,G,1,2026-06-15T18:00:00+00:00,25,26,Belgium,Egypt,0
+GGM12,Group,G,1,2026-06-15T18:00:00+00:00,27,28,Iran,New Zealand,0
+GGM21,Group,G,2,2026-06-19T18:00:00+00:00,25,27,Belgium,Iran,0
+GGM22,Group,G,2,2026-06-19T18:00:00+00:00,28,26,New Zealand,Egypt,0
+GGM31,Group,G,3,2026-06-23T18:00:00+00:00,26,27,Egypt,Iran,0
+GGM32,Group,G,3,2026-06-23T18:00:00+00:00,28,25,New Zealand,Belgium,0
+GHM11,Group,H,1,2026-06-15T18:00:00+00:00,29,30,Spain,Cape Verde,0
+GHM12,Group,H,1,2026-06-15T18:00:00+00:00,31,32,Saudi Arabia,Uruguay,0
+GHM21,Group,H,2,2026-06-19T18:00:00+00:00,29,31,Spain,Saudi Arabia,0
+GHM22,Group,H,2,2026-06-19T18:00:00+00:00,32,30,Uruguay,Cape Verde,0
+GHM31,Group,H,3,2026-06-23T18:00:00+00:00,30,31,Cape Verde,Saudi Arabia,0
+GHM32,Group,H,3,2026-06-23T18:00:00+00:00,32,29,Uruguay,Spain,0
+GIM11,Group,I,1,2026-06-16T18:00:00+00:00,33,34,France,Senegal,0
+GIM12,Group,I,1,2026-06-16T18:00:00+00:00,35,36,Iraq,Norway,0
+GIM21,Group,I,2,2026-06-20T18:00:00+00:00,33,35,France,Iraq,0
+GIM22,Group,I,2,2026-06-20T18:00:00+00:00,36,34,Norway,Senegal,0
+GIM31,Group,I,3,2026-06-24T18:00:00+00:00,34,35,Senegal,Iraq,0
+GIM32,Group,I,3,2026-06-24T18:00:00+00:00,36,33,Norway,France,0
+GJM11,Group,J,1,2026-06-16T18:00:00+00:00,37,38,Argentina,Algeria,0
+GJM12,Group,J,1,2026-06-16T18:00:00+00:00,39,40,Austria,Jordan,0
+GJM21,Group,J,2,2026-06-20T18:00:00+00:00,37,39,Argentina,Austria,0
+GJM22,Group,J,2,2026-06-20T18:00:00+00:00,40,38,Jordan,Algeria,0
+GJM31,Group,J,3,2026-06-24T18:00:00+00:00,38,39,Algeria,Austria,0
+GJM32,Group,J,3,2026-06-24T18:00:00+00:00,40,37,Jordan,Argentina,0
+GKM11,Group,K,1,2026-06-17T18:00:00+00:00,41,42,Portugal,DR Congo,0
+GKM12,Group,K,1,2026-06-17T18:00:00+00:00,43,44,Uzbekistan,Colombia,0
+GKM21,Group,K,2,2026-06-21T18:00:00+00:00,41,43,Portugal,Uzbekistan,0
+GKM22,Group,K,2,2026-06-21T18:00:00+00:00,44,42,Colombia,DR Congo,0
+GKM31,Group,K,3,2026-06-25T18:00:00+00:00,42,43,DR Congo,Uzbekistan,0
+GKM32,Group,K,3,2026-06-25T18:00:00+00:00,44,41,Colombia,Portugal,0
+GLM11,Group,L,1,2026-06-17T18:00:00+00:00,45,46,England,Croatia,0
+GLM12,Group,L,1,2026-06-17T18:00:00+00:00,47,48,Ghana,Panama,0
+GLM21,Group,L,2,2026-06-21T18:00:00+00:00,45,47,England,Ghana,0
+GLM22,Group,L,2,2026-06-21T18:00:00+00:00,48,46,Panama,Croatia,0
+GLM31,Group,L,3,2026-06-25T18:00:00+00:00,46,47,Croatia,Ghana,0
+GLM32,Group,L,3,2026-06-25T18:00:00+00:00,48,45,Panama,England,0
+KO_Roundof32_1,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #1 home (TBD),Round of 32 #1 away (TBD),1
+KO_Roundof32_2,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #2 home (TBD),Round of 32 #2 away (TBD),1
+KO_Roundof32_3,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #3 home (TBD),Round of 32 #3 away (TBD),1
+KO_Roundof32_4,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #4 home (TBD),Round of 32 #4 away (TBD),1
+KO_Roundof32_5,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #5 home (TBD),Round of 32 #5 away (TBD),1
+KO_Roundof32_6,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #6 home (TBD),Round of 32 #6 away (TBD),1
+KO_Roundof32_7,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #7 home (TBD),Round of 32 #7 away (TBD),1
+KO_Roundof32_8,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #8 home (TBD),Round of 32 #8 away (TBD),1
+KO_Roundof32_9,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #9 home (TBD),Round of 32 #9 away (TBD),1
+KO_Roundof32_10,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #10 home (TBD),Round of 32 #10 away (TBD),1
+KO_Roundof32_11,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #11 home (TBD),Round of 32 #11 away (TBD),1
+KO_Roundof32_12,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #12 home (TBD),Round of 32 #12 away (TBD),1
+KO_Roundof32_13,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #13 home (TBD),Round of 32 #13 away (TBD),1
+KO_Roundof32_14,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #14 home (TBD),Round of 32 #14 away (TBD),1
+KO_Roundof32_15,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #15 home (TBD),Round of 32 #15 away (TBD),1
+KO_Roundof32_16,Round of 32,,,2026-06-28T18:00:00+00:00,,,Round of 32 #16 home (TBD),Round of 32 #16 away (TBD),1
+KO_Roundof16_1,Round of 16,,,2026-07-04T18:00:00+00:00,,,Round of 16 #1 home (TBD),Round of 16 #1 away (TBD),1
+KO_Roundof16_2,Round of 16,,,2026-07-04T18:00:00+00:00,,,Round of 16 #2 home (TBD),Round of 16 #2 away (TBD),1
+KO_Roundof16_3,Round of 16,,,2026-07-04T18:00:00+00:00,,,Round of 16 #3 home (TBD),Round of 16 #3 away (TBD),1
+KO_Roundof16_4,Round of 16,,,2026-07-04T18:00:00+00:00,,,Round of 16 #4 home (TBD),Round of 16 #4 away (TBD),1
+KO_Roundof16_5,Round of 16,,,2026-07-04T18:00:00+00:00,,,Round of 16 #5 home (TBD),Round of 16 #5 away (TBD),1
+KO_Roundof16_6,Round of 16,,,2026-07-04T18:00:00+00:00,,,Round of 16 #6 home (TBD),Round of 16 #6 away (TBD),1
+KO_Roundof16_7,Round of 16,,,2026-07-04T18:00:00+00:00,,,Round of 16 #7 home (TBD),Round of 16 #7 away (TBD),1
+KO_Roundof16_8,Round of 16,,,2026-07-04T18:00:00+00:00,,,Round of 16 #8 home (TBD),Round of 16 #8 away (TBD),1
+KO_Quarterfinal_1,Quarter-final,,,2026-07-09T18:00:00+00:00,,,Quarter-final #1 home (TBD),Quarter-final #1 away (TBD),1
+KO_Quarterfinal_2,Quarter-final,,,2026-07-09T18:00:00+00:00,,,Quarter-final #2 home (TBD),Quarter-final #2 away (TBD),1
+KO_Quarterfinal_3,Quarter-final,,,2026-07-09T18:00:00+00:00,,,Quarter-final #3 home (TBD),Quarter-final #3 away (TBD),1
+KO_Quarterfinal_4,Quarter-final,,,2026-07-09T18:00:00+00:00,,,Quarter-final #4 home (TBD),Quarter-final #4 away (TBD),1
+KO_Semifinal_1,Semi-final,,,2026-07-14T18:00:00+00:00,,,Semi-final #1 home (TBD),Semi-final #1 away (TBD),1
+KO_Semifinal_2,Semi-final,,,2026-07-14T18:00:00+00:00,,,Semi-final #2 home (TBD),Semi-final #2 away (TBD),1
+KO_Thirdplace_1,Third place,,,2026-07-18T18:00:00+00:00,,,Third place #1 home (TBD),Third place #1 away (TBD),1
+KO_Final_1,Final,,,2026-07-19T18:00:00+00:00,,,Final #1 home (TBD),Final #1 away (TBD),1
