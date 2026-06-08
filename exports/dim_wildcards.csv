@@ -1,0 +1,9 @@
+wildcard_id,question,type,options,points,hint
+W01,Total goals scored in the entire tournament,number,,6.0,104 matches. Closest gets the most (banded).
+W02,Will the Final be decided by a penalty shootout?,boolean,Yes|No,4.0,
+W03,Golden Boot winner's number of goals,number,,5.0,Top scorer's final goal tally.
+W04,"Will any host nation (USA, Mexico, Canada) reach the semi-finals?",boolean,Yes|No,4.0,
+W05,Which confederation will the champion come from?,choice,UEFA|CONMEBOL|CONCACAF|CAF|AFC|OFC,5.0,
+W06,Most goals scored by a single team in one match,number,,4.0,The biggest single-team goal haul of the tournament.
+W07,Dark horse: name a team NOT in the world top 10 that reaches the quarter-finals,team,,8.0,"High risk, high reward. 0 points if they don't make the QF."
+W08,Total number of red cards shown in the group stage,number,,4.0,Straight reds and second-yellow reds both count.

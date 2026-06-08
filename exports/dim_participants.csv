@@ -1,0 +1,11 @@
+participant_id,name,email,joined_at
+1,Sondre,sondre@example.com,2026-06-08T21:40:43.811153+00:00
+2,Ingrid,ingrid@example.com,2026-06-08T21:40:43.811988+00:00
+3,Lars,lars@example.com,2026-06-08T21:40:43.812003+00:00
+4,Mette,mette@example.com,2026-06-08T21:40:43.812006+00:00
+5,Jonas,jonas@example.com,2026-06-08T21:40:43.812009+00:00
+6,Kari,kari@example.com,2026-06-08T21:40:43.812012+00:00
+7,Erik,erik@example.com,2026-06-08T21:40:43.812015+00:00
+8,Nina,nina@example.com,2026-06-08T21:40:43.812017+00:00
+9,Ola,ola@example.com,2026-06-08T21:40:43.812020+00:00
+10,Silje,silje@example.com,2026-06-08T21:40:43.812022+00:00

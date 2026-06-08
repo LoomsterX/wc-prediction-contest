@@ -15,6 +15,22 @@ It covers all three prediction types:
 
 Full scoring is in **[docs/RULES.md](docs/RULES.md)**.
 
+### Player experience
+
+- **Accounts (name + PIN):** each player creates an account with a display
+  name and a short PIN and logs in from the sidebar. You can only edit your
+  own predictions. The admin can reset anyone's PIN.
+- **Profile & jersey:** set a favorite team and player, and design a custom
+  football kit (two colours + pattern: solid / stripes / halves / sash). Your
+  jersey appears in the sidebar and on the leaderboard podium.
+- **Navigation:** a sidebar switches between Home, My profile, Match picks,
+  Outcomes, Wildcards, Leaderboard and Admin. On Match picks, group A–L are
+  buttons you click to navigate, with a "🔒 Lock in" submit at the bottom.
+- **Editing stays open** until the organiser flips the **prediction lock** in
+  the Admin page (one toggle freezes all editing for everyone).
+- **Animated podium:** the leaderboard shows a big top-3 podium with crowns,
+  jerseys, sparkles and confetti — both in the app and the HTML dashboard.
+
 ## How it fits together
 
 ```
@@ -47,6 +63,7 @@ uv sync
 uv run python main.py seed
 
 # 3. (optional) load demo players + results to see everything working
+#    (demo players all use PIN "0000" so you can log in as them)
 uv run python main.py sample
 
 # 4. run the submission + admin app
@@ -70,13 +87,16 @@ refreshes the dashboards — but day to day you'll just use the app.
 3. **Change two things before sharing:** the admin password near the top of
    `app/streamlit_app.py` (`ADMIN_PASSWORD`), and confirm the matchday 2 & 3
    dates in `data/fixtures.csv` against the official FIFA schedule.
-4. Share the app link. Colleagues open it, **Join**, and fill in their match,
-   outcome and wildcard predictions. Outcomes and wildcards lock at the opening
-   match; each match's scoreline locks at its own kickoff.
+4. Share the app link. Colleagues open it, create an account (name + PIN),
+   design their jersey on **My profile**, and fill in their match, outcome and
+   wildcard predictions. Editing stays open until you lock it.
+5. **At the deadline**, open **Admin** and flip the **🔒 Predictions locked**
+   toggle on — this freezes everyone's picks. (Flip it off again only if you
+   want to reopen editing.)
 
 **During the tournament**
 
-1. Open the app's **Admin** tab (password protected), enter the actual scores
+1. Open the app's **Admin** page (password protected), enter the actual scores
    for finished matches, and — as rounds resolve — the outcome and wildcard
    results.
 2. Click **Refresh dashboards**. This recomputes every score and rewrites

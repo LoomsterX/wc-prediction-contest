@@ -1,0 +1,49 @@
+team_id,name,group_code,confederation,is_host
+1,Mexico,A,CONCACAF,1
+2,South Africa,A,CAF,0
+3,South Korea,A,AFC,0
+4,Czech Republic,A,UEFA,0
+5,Canada,B,CONCACAF,1
+6,Bosnia and Herzegovina,B,UEFA,0
+7,Qatar,B,AFC,0
+8,Switzerland,B,UEFA,0
+9,Brazil,C,CONMEBOL,0
+10,Morocco,C,CAF,0
+11,Haiti,C,CONCACAF,0
+12,Scotland,C,UEFA,0
+13,United States,D,CONCACAF,1
+14,Paraguay,D,CONMEBOL,0
+15,Australia,D,AFC,0
+16,Turkey,D,UEFA,0
+17,Germany,E,UEFA,0
+18,Curaçao,E,CONCACAF,0
+19,Ivory Coast,E,CAF,0
+20,Ecuador,E,CONMEBOL,0
+21,Netherlands,F,UEFA,0
+22,Japan,F,AFC,0
+23,Sweden,F,UEFA,0
+24,Tunisia,F,CAF,0
+25,Belgium,G,UEFA,0
+26,Egypt,G,CAF,0
+27,Iran,G,AFC,0
+28,New Zealand,G,OFC,0
+29,Spain,H,UEFA,0
+30,Cape Verde,H,CAF,0
+31,Saudi Arabia,H,AFC,0
+32,Uruguay,H,CONMEBOL,0
+33,France,I,UEFA,0
+34,Senegal,I,CAF,0
+35,Iraq,I,AFC,0
+36,Norway,I,UEFA,0
+37,Argentina,J,CONMEBOL,0
+38,Algeria,J,CAF,0
+39,Austria,J,UEFA,0
+40,Jordan,J,AFC,0
+41,Portugal,K,UEFA,0
+42,DR Congo,K,CAF,0
+43,Uzbekistan,K,AFC,0
+44,Colombia,K,CONMEBOL,0
+45,England,L,UEFA,0
+46,Croatia,L,UEFA,0
+47,Ghana,L,CAF,0
+48,Panama,L,CONCACAF,0

@@ -27,7 +27,10 @@ from . import seed_data
 def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
     path = Path(db_path) if db_path else config.DB_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path)
+    # check_same_thread=False: Streamlit reruns may use different threads, and
+    # the connection is cached/shared across them. Safe here because the app is
+    # low-concurrency (<30 users) and SQLite serialises writes internally.
+    conn = sqlite3.connect(path, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
@@ -35,10 +38,21 @@ def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS participants (
-    participant_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name           TEXT NOT NULL UNIQUE,
-    email          TEXT,
-    joined_at      TEXT NOT NULL
+    participant_id  INTEGER PRIMARY KEY AUTOINCREMENT,
+    name            TEXT NOT NULL UNIQUE,
+    email           TEXT,
+    joined_at       TEXT NOT NULL,
+    pin_hash        TEXT,            -- sha256 of the player's PIN (login)
+    favorite_team   TEXT,
+    favorite_player TEXT,
+    shirt_primary   TEXT DEFAULT '#2f81f7',
+    shirt_secondary TEXT DEFAULT '#ffffff',
+    shirt_pattern   TEXT DEFAULT 'solid'   -- solid | stripes | halves | sash
+);
+
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT
 );
 
 CREATE TABLE IF NOT EXISTS teams (
@@ -121,7 +135,101 @@ CREATE TABLE IF NOT EXISTS wildcard_results (
 
 def init_db(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
+    migrate(conn)
     conn.commit()
+
+
+# --------------------------------------------------------------------------- #
+# Migration: add new columns to databases created by an earlier version
+# --------------------------------------------------------------------------- #
+_PARTICIPANT_COLUMNS = {
+    "pin_hash": "TEXT",
+    "favorite_team": "TEXT",
+    "favorite_player": "TEXT",
+    "shirt_primary": "TEXT DEFAULT '#2f81f7'",
+    "shirt_secondary": "TEXT DEFAULT '#ffffff'",
+    "shirt_pattern": "TEXT DEFAULT 'solid'",
+}
+
+
+def migrate(conn: sqlite3.Connection) -> None:
+    conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+    existing = {r["name"] for r in conn.execute("PRAGMA table_info(participants)")}
+    for col, decl in _PARTICIPANT_COLUMNS.items():
+        if col not in existing:
+            conn.execute(f"ALTER TABLE participants ADD COLUMN {col} {decl}")
+    conn.commit()
+
+
+# --------------------------------------------------------------------------- #
+# Auth, profile & settings helpers
+# --------------------------------------------------------------------------- #
+import hashlib  # noqa: E402
+
+
+def hash_pin(pin: str) -> str:
+    return hashlib.sha256(f"wc2026::{pin}".encode()).hexdigest()
+
+
+def create_participant(conn, name, pin, email="", *, favorite_team="",
+                       favorite_player="", shirt_primary="#2f81f7",
+                       shirt_secondary="#ffffff", shirt_pattern="solid") -> int:
+    cur = conn.execute(
+        """INSERT INTO participants
+           (name, email, joined_at, pin_hash, favorite_team, favorite_player,
+            shirt_primary, shirt_secondary, shirt_pattern)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        (name, email, now_iso(), hash_pin(pin), favorite_team, favorite_player,
+         shirt_primary, shirt_secondary, shirt_pattern))
+    conn.commit()
+    return cur.lastrowid
+
+
+def verify_login(conn, name, pin):
+    """Return the participant row if name+PIN match, else None."""
+    row = conn.execute("SELECT * FROM participants WHERE name=?", (name,)).fetchone()
+    if row is None:
+        return None
+    if row["pin_hash"] and row["pin_hash"] == hash_pin(pin):
+        return row
+    return None
+
+
+def update_profile(conn, pid, **fields) -> None:
+    allowed = {"favorite_team", "favorite_player", "shirt_primary",
+               "shirt_secondary", "shirt_pattern", "email"}
+    sets = {k: v for k, v in fields.items() if k in allowed}
+    if not sets:
+        return
+    cols = ", ".join(f"{k}=?" for k in sets)
+    conn.execute(f"UPDATE participants SET {cols} WHERE participant_id=?",
+                 (*sets.values(), pid))
+    conn.commit()
+
+
+def set_pin(conn, pid, pin) -> None:
+    conn.execute("UPDATE participants SET pin_hash=? WHERE participant_id=?",
+                 (hash_pin(pin), pid))
+    conn.commit()
+
+
+def get_setting(conn, key, default=None):
+    row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
+    return row["value"] if row else default
+
+
+def set_setting(conn, key, value) -> None:
+    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)",
+                 (key, str(value)))
+    conn.commit()
+
+
+def predictions_locked(conn) -> bool:
+    return get_setting(conn, "predictions_locked", "0") == "1"
+
+
+def set_predictions_locked(conn, locked: bool) -> None:
+    set_setting(conn, "predictions_locked", "1" if locked else "0")
 
 
 # --------------------------------------------------------------------------- #

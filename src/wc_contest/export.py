@@ -157,6 +157,22 @@ def export_dashboard_json(conn: sqlite3.Connection) -> None:
     timeline = _fact_timeline(conn, per_match)
     matches = _matches_resolved(conn)
 
+    # attach jersey/profile info to each leaderboard row (for the podium)
+    profiles = {}
+    try:
+        for r in conn.execute(
+            "SELECT participant_id, favorite_team, shirt_primary, shirt_secondary, "
+            "shirt_pattern FROM participants"):
+            profiles[r["participant_id"]] = dict(r)
+    except Exception:
+        pass
+    for r in lb:
+        p = profiles.get(r["participant_id"], {})
+        r["shirt_primary"] = p.get("shirt_primary") or "#2f81f7"
+        r["shirt_secondary"] = p.get("shirt_secondary") or "#ffffff"
+        r["shirt_pattern"] = p.get("shirt_pattern") or "solid"
+        r["favorite_team"] = p.get("favorite_team") or ""
+
     # timeline -> per-name series for the line chart
     series: dict[str, list[dict]] = defaultdict(list)
     for row in timeline:

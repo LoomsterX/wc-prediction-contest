@@ -28,13 +28,21 @@ def main():
         group_teams[g] = [r["name"] for r in conn.execute(
             "SELECT name FROM teams WHERE group_code=?", (g,))]
 
-    # participants
+    # participants (all with PIN "0000" for demo + a random jersey + favorites)
+    palette = ["#e2231a", "#0b3d91", "#f3b521", "#1d9e75", "#7f77dd",
+               "#d85a30", "#185fa5", "#0a6b3c", "#111111", "#d4537e"]
+    patterns = ["solid", "stripes", "halves", "sash"]
     pids = {}
-    for name in DEMO_PLAYERS:
-        cur = conn.execute(
-            "INSERT INTO participants (name, email, joined_at) VALUES (?,?,?)",
-            (name, f"{name.lower()}@example.com", dbmod.now_iso()))
-        pids[name] = cur.lastrowid
+    for i, name in enumerate(DEMO_PLAYERS):
+        prim = palette[i % len(palette)]
+        sec = "#ffffff" if i % 2 == 0 else "#0b1020"
+        pid = dbmod.create_participant(
+            conn, name, "0000", f"{name.lower()}@example.com",
+            favorite_team=random.choice([r["name"] for r in conn.execute("SELECT name FROM teams")]),
+            favorite_player=f"Player {random.randint(1, 30)}",
+            shirt_primary=prim, shirt_secondary=sec,
+            shirt_pattern=patterns[i % len(patterns)])
+        pids[name] = pid
 
     group_matches = conn.execute(
         "SELECT * FROM matches WHERE is_knockout=0").fetchall()
