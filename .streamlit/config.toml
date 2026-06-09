@@ -1,0 +1,8 @@
+# SoftwareOne brand — dark / neon theme for the Streamlit app.
+[theme]
+base = "dark"
+primaryColor = "#6f5bff"            # neon indigo (glowing SoftwareOne blue)
+backgroundColor = "#0a0c16"         # near-black indigo
+secondaryBackgroundColor = "#11152a"
+textColor = "#e7eaf6"
+font = "monospace"

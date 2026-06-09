@@ -1,188 +1,81 @@
-"""SQLite data layer: schema, seeding and connection helpers.
+"""Data layer: schema bootstrap, seeding, auth/profile/settings helpers.
 
-The schema is a small star schema:
+Runs on either SQLite (local, default) or Postgres/Supabase (set DATABASE_URL)
+via the engine wrapper in engine.py. The schema itself is defined as SQLAlchemy
+tables in engine.py so the correct DDL is emitted for each database.
 
   Dimensions:  participants, teams, matches, wildcards
   Facts:       match_predictions, outcome_predictions, wildcard_predictions
   Actuals:     match_results, outcome_results, wildcard_results
-
-Team identity uses an integer team_id; knockout fixtures keep team ids NULL
-until the admin fills them in as the bracket fills out.
 """
 
 from __future__ import annotations
 
 import csv
-import sqlite3
+import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
 from . import config
 from . import seed_data
+from . import engine as eng
+from .engine import Database, upsert, metadata
 
 
 # --------------------------------------------------------------------------- #
-# Connection
+# Connection / bootstrap
 # --------------------------------------------------------------------------- #
-def connect(db_path: Path | str | None = None) -> sqlite3.Connection:
-    path = Path(db_path) if db_path else config.DB_PATH
-    path.parent.mkdir(parents=True, exist_ok=True)
-    # check_same_thread=False: Streamlit reruns may use different threads, and
-    # the connection is cached/shared across them. Safe here because the app is
-    # low-concurrency (<30 users) and SQLite serialises writes internally.
-    conn = sqlite3.connect(path, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
+def connect(db_path: Path | str | None = None) -> Database:
+    return Database(eng.get_engine(db_path))
 
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS participants (
-    participant_id  INTEGER PRIMARY KEY AUTOINCREMENT,
-    name            TEXT NOT NULL UNIQUE,
-    email           TEXT,
-    joined_at       TEXT NOT NULL,
-    pin_hash        TEXT,            -- sha256 of the player's PIN (login)
-    favorite_team   TEXT,
-    favorite_player TEXT,
-    shirt_primary   TEXT DEFAULT '#2f81f7',
-    shirt_secondary TEXT DEFAULT '#ffffff',
-    shirt_pattern   TEXT DEFAULT 'solid'   -- solid | stripes | halves | sash
-);
-
-CREATE TABLE IF NOT EXISTS settings (
-    key   TEXT PRIMARY KEY,
-    value TEXT
-);
-
-CREATE TABLE IF NOT EXISTS teams (
-    team_id       INTEGER PRIMARY KEY,
-    name          TEXT NOT NULL UNIQUE,
-    group_code    TEXT,
-    confederation TEXT,
-    is_host       INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS matches (
-    match_id     TEXT PRIMARY KEY,
-    stage        TEXT NOT NULL,          -- 'Group' or knockout stage name
-    group_code   TEXT,                   -- A..L for group games, else NULL
-    matchday     INTEGER,                -- 1..3 for groups
-    kickoff_utc  TEXT,                   -- ISO 8601; drives the per-match lock
-    home_team_id INTEGER REFERENCES teams(team_id),
-    away_team_id INTEGER REFERENCES teams(team_id),
-    home_label   TEXT,                   -- placeholder label for TBD knockout slots
-    away_label   TEXT,
-    is_knockout  INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS wildcards (
-    wildcard_id TEXT PRIMARY KEY,
-    question    TEXT NOT NULL,
-    type        TEXT NOT NULL,           -- number | boolean | choice | team
-    options     TEXT,                    -- pipe-separated for boolean/choice
-    points      REAL NOT NULL,
-    hint        TEXT
-);
-
-CREATE TABLE IF NOT EXISTS match_predictions (
-    participant_id INTEGER NOT NULL REFERENCES participants(participant_id),
-    match_id       TEXT NOT NULL REFERENCES matches(match_id),
-    pred_home      INTEGER NOT NULL,
-    pred_away      INTEGER NOT NULL,
-    pred_advance   INTEGER REFERENCES teams(team_id),  -- knockout: who goes through
-    submitted_at   TEXT NOT NULL,
-    PRIMARY KEY (participant_id, match_id)
-);
-
-CREATE TABLE IF NOT EXISTS outcome_predictions (
-    participant_id INTEGER NOT NULL REFERENCES participants(participant_id),
-    category       TEXT NOT NULL,        -- champion, runner_up, finalist, ...
-    ref            TEXT NOT NULL,        -- group code / slot index / ''
-    value          TEXT NOT NULL,        -- team name (or player for golden_boot)
-    submitted_at   TEXT NOT NULL,
-    PRIMARY KEY (participant_id, category, ref)
-);
-
-CREATE TABLE IF NOT EXISTS wildcard_predictions (
-    participant_id INTEGER NOT NULL REFERENCES participants(participant_id),
-    wildcard_id    TEXT NOT NULL REFERENCES wildcards(wildcard_id),
-    value          TEXT NOT NULL,
-    submitted_at   TEXT NOT NULL,
-    PRIMARY KEY (participant_id, wildcard_id)
-);
-
-CREATE TABLE IF NOT EXISTS match_results (
-    match_id     TEXT PRIMARY KEY REFERENCES matches(match_id),
-    home_goals   INTEGER NOT NULL,
-    away_goals   INTEGER NOT NULL,
-    advance      INTEGER REFERENCES teams(team_id)  -- knockout winner (after pens)
-);
-
-CREATE TABLE IF NOT EXISTS outcome_results (
-    category TEXT NOT NULL,
-    ref      TEXT NOT NULL,
-    value    TEXT NOT NULL,
-    PRIMARY KEY (category, ref)
-);
-
-CREATE TABLE IF NOT EXISTS wildcard_results (
-    wildcard_id TEXT PRIMARY KEY REFERENCES wildcards(wildcard_id),
-    value       TEXT NOT NULL
-);
-"""
-
-
-def init_db(conn: sqlite3.Connection) -> None:
-    conn.executescript(SCHEMA)
+def init_db(conn: Database) -> None:
+    metadata.create_all(conn.engine)
     migrate(conn)
-    conn.commit()
 
 
 # --------------------------------------------------------------------------- #
-# Migration: add new columns to databases created by an earlier version
+# Migration: bring an older SQLite database up to the current participant schema
+# (fresh Postgres databases get every column from create_all, so this is a
+#  no-op there).
 # --------------------------------------------------------------------------- #
 _PARTICIPANT_COLUMNS = {
     "pin_hash": "TEXT",
     "favorite_team": "TEXT",
     "favorite_player": "TEXT",
-    "shirt_primary": "TEXT DEFAULT '#2f81f7'",
+    "shirt_primary": "TEXT DEFAULT '#1801B4'",
     "shirt_secondary": "TEXT DEFAULT '#ffffff'",
     "shirt_pattern": "TEXT DEFAULT 'solid'",
 }
 
 
-def migrate(conn: sqlite3.Connection) -> None:
-    conn.execute("CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT)")
+def migrate(conn: Database) -> None:
+    if conn.dialect != "sqlite":
+        return
     existing = {r["name"] for r in conn.execute("PRAGMA table_info(participants)")}
     for col, decl in _PARTICIPANT_COLUMNS.items():
         if col not in existing:
             conn.execute(f"ALTER TABLE participants ADD COLUMN {col} {decl}")
-    conn.commit()
 
 
 # --------------------------------------------------------------------------- #
 # Auth, profile & settings helpers
 # --------------------------------------------------------------------------- #
-import hashlib  # noqa: E402
-
-
 def hash_pin(pin: str) -> str:
     return hashlib.sha256(f"wc2026::{pin}".encode()).hexdigest()
 
 
 def create_participant(conn, name, pin, email="", *, favorite_team="",
-                       favorite_player="", shirt_primary="#2f81f7",
+                       favorite_player="", shirt_primary="#1801B4",
                        shirt_secondary="#ffffff", shirt_pattern="solid") -> int:
-    cur = conn.execute(
+    row = conn.execute(
         """INSERT INTO participants
            (name, email, joined_at, pin_hash, favorite_team, favorite_player,
             shirt_primary, shirt_secondary, shirt_pattern)
-           VALUES (?,?,?,?,?,?,?,?,?)""",
+           VALUES (?,?,?,?,?,?,?,?,?) RETURNING participant_id""",
         (name, email, now_iso(), hash_pin(pin), favorite_team, favorite_player,
-         shirt_primary, shirt_secondary, shirt_pattern))
-    conn.commit()
-    return cur.lastrowid
+         shirt_primary, shirt_secondary, shirt_pattern)).fetchone()
+    return row[0]
 
 
 def verify_login(conn, name, pin):
@@ -204,13 +97,11 @@ def update_profile(conn, pid, **fields) -> None:
     cols = ", ".join(f"{k}=?" for k in sets)
     conn.execute(f"UPDATE participants SET {cols} WHERE participant_id=?",
                  (*sets.values(), pid))
-    conn.commit()
 
 
 def set_pin(conn, pid, pin) -> None:
     conn.execute("UPDATE participants SET pin_hash=? WHERE participant_id=?",
                  (hash_pin(pin), pid))
-    conn.commit()
 
 
 def get_setting(conn, key, default=None):
@@ -219,9 +110,7 @@ def get_setting(conn, key, default=None):
 
 
 def set_setting(conn, key, value) -> None:
-    conn.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?,?)",
-                 (key, str(value)))
-    conn.commit()
+    upsert(conn, "settings", {"key": key, "value": str(value)}, ["key"])
 
 
 def predictions_locked(conn) -> bool:
@@ -238,7 +127,6 @@ def set_predictions_locked(conn, locked: bool) -> None:
 def generate_seed_csvs() -> None:
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    # teams.csv
     teams: list[dict] = []
     tid = 1
     name_to_id: dict[str, int] = {}
@@ -254,12 +142,10 @@ def generate_seed_csvs() -> None:
                ["team_id", "name", "group_code", "confederation", "is_host"],
                teams)
 
-    # fixtures.csv  (72 group matches + 32 knockout placeholders)
     fixtures: list[dict] = []
     for group, members in seed_data.GROUPS.items():
         md1 = datetime.fromisoformat(seed_data.GROUP_MD1_DATE[group])
         for md, pairs in seed_data.ROUND_ROBIN.items():
-            # space matchdays ~4 days apart within the group window
             day = md1.replace() if md == 1 else md1.replace(day=md1.day + (md - 1) * 4)
             for i, (hs, as_) in enumerate(pairs, start=1):
                 home = members[hs - 1][0]
@@ -276,7 +162,6 @@ def generate_seed_csvs() -> None:
                     "away_label": away,
                     "is_knockout": 0,
                 })
-    # knockout placeholders
     for stage, count, start in seed_data.KNOCKOUT_STAGES:
         for n in range(1, count + 1):
             slug = stage.replace(" ", "").replace("-", "")
@@ -298,7 +183,6 @@ def generate_seed_csvs() -> None:
                 "is_knockout"],
                fixtures)
 
-    # wildcards.csv
     _write_csv(config.WILDCARDS_CSV,
                ["wildcard_id", "question", "type", "options", "points", "hint"],
                seed_data.WILDCARDS)
@@ -313,36 +197,37 @@ def _write_csv(path: Path, fieldnames: list[str], rows: list[dict]) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# Load CSVs into the dimension tables
+# Load CSVs into the dimension tables (dialect-agnostic upserts)
 # --------------------------------------------------------------------------- #
-def load_seed(conn: sqlite3.Connection) -> None:
+def load_seed(conn: Database) -> None:
     with open(config.TEAMS_CSV, encoding="utf-8") as f:
         for r in csv.DictReader(f):
-            conn.execute(
-                "INSERT OR REPLACE INTO teams VALUES (?,?,?,?,?)",
-                (int(r["team_id"]), r["name"], r["group_code"] or None,
-                 r["confederation"] or None, int(r["is_host"] or 0)),
-            )
+            upsert(conn, "teams", {
+                "team_id": int(r["team_id"]), "name": r["name"],
+                "group_code": r["group_code"] or None,
+                "confederation": r["confederation"] or None,
+                "is_host": int(r["is_host"] or 0),
+            }, ["team_id"])
     with open(config.FIXTURES_CSV, encoding="utf-8") as f:
         for r in csv.DictReader(f):
-            conn.execute(
-                "INSERT OR REPLACE INTO matches VALUES (?,?,?,?,?,?,?,?,?,?)",
-                (r["match_id"], r["stage"], r["group_code"] or None,
-                 int(r["matchday"]) if r["matchday"] else None,
-                 r["kickoff_utc"] or None,
-                 int(r["home_team_id"]) if r["home_team_id"] else None,
-                 int(r["away_team_id"]) if r["away_team_id"] else None,
-                 r["home_label"] or None, r["away_label"] or None,
-                 int(r["is_knockout"] or 0)),
-            )
+            upsert(conn, "matches", {
+                "match_id": r["match_id"], "stage": r["stage"],
+                "group_code": r["group_code"] or None,
+                "matchday": int(r["matchday"]) if r["matchday"] else None,
+                "kickoff_utc": r["kickoff_utc"] or None,
+                "home_team_id": int(r["home_team_id"]) if r["home_team_id"] else None,
+                "away_team_id": int(r["away_team_id"]) if r["away_team_id"] else None,
+                "home_label": r["home_label"] or None,
+                "away_label": r["away_label"] or None,
+                "is_knockout": int(r["is_knockout"] or 0),
+            }, ["match_id"])
     with open(config.WILDCARDS_CSV, encoding="utf-8") as f:
         for r in csv.DictReader(f):
-            conn.execute(
-                "INSERT OR REPLACE INTO wildcards VALUES (?,?,?,?,?,?)",
-                (r["wildcard_id"], r["question"], r["type"], r["options"],
-                 float(r["points"]), r.get("hint", "")),
-            )
-    conn.commit()
+            upsert(conn, "wildcards", {
+                "wildcard_id": r["wildcard_id"], "question": r["question"],
+                "type": r["type"], "options": r["options"],
+                "points": float(r["points"]), "hint": r.get("hint", ""),
+            }, ["wildcard_id"])
 
 
 def now_iso() -> str:
@@ -350,25 +235,20 @@ def now_iso() -> str:
 
 
 def build_fresh(db_path: Path | str | None = None) -> None:
-    """Generate CSVs, (re)create the DB and load the dimensions.
+    """(Re)create all tables from scratch and load the dimensions.
 
-    Any existing database file is removed first so this always produces a
-    clean build (predictions in an old DB are discarded - use it only for
-    setup / reseeding, not mid-contest).
+    Destructive: drops existing tables first, so use only for setup / reseeding,
+    never mid-contest. Works on both SQLite and Postgres/Supabase.
     """
     generate_seed_csvs()
-    path = Path(db_path) if db_path else config.DB_PATH
-    for p in (path, path.with_name(path.name + "-journal")):
-        try:
-            p.unlink()
-        except FileNotFoundError:
-            pass
-    conn = connect(path)
-    init_db(conn)
+    engine = eng.get_engine(db_path)
+    metadata.drop_all(engine)
+    metadata.create_all(engine)
+    conn = connect(db_path)
     load_seed(conn)
     conn.close()
 
 
 if __name__ == "__main__":
     build_fresh()
-    print("Database built and seeded at", config.DB_PATH)
+    print("Database built and seeded.")

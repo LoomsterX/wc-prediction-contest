@@ -16,14 +16,30 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import os
+
 import streamlit as st
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
+# Use a hosted database (Supabase/Postgres) when DATABASE_URL is provided via
+# Streamlit secrets; otherwise fall back to local SQLite. Must run before the
+# engine is created.
+try:
+    if "DATABASE_URL" in st.secrets:
+        os.environ["DATABASE_URL"] = st.secrets["DATABASE_URL"]
+except Exception:
+    pass
+
 from wc_contest import config, db as dbmod, scoring, export, avatar  # noqa: E402
+from wc_contest.engine import upsert  # noqa: E402
 from wc_contest.config import OUTCOME_POINTS  # noqa: E402
 
 ADMIN_PASSWORD = "worldcup2026"  # CHANGE THIS before sharing the app
+try:                              # ...or set it in Streamlit secrets
+    ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", ADMIN_PASSWORD)
+except Exception:
+    pass
 
 st.set_page_config(
     page_title="WC 2026 Prediction Contest", page_icon="⚽", layout="wide"
@@ -48,21 +64,29 @@ conn = get_conn()
 st.markdown(
     """
 <style>
-  .stApp { background: radial-gradient(1200px 600px at 50% -10%,
-           rgba(47,129,247,0.10), transparent 60%); }
+  @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@500;700&display=swap');
+  :root { --neon:#6f5bff; --neon2:#29f0ff; --gold:#ffd23f;
+          --pixel:"Press Start 2P", monospace; --tech:"Orbitron", sans-serif; }
+  .stApp { background:
+      linear-gradient(rgba(111,91,255,.04) 1px, transparent 1px) 0 0 / 100% 28px,
+      radial-gradient(1100px 560px at 50% -10%, rgba(111,91,255,0.18), transparent 60%),
+      #0a0c16; }
   .wc-hero {
-    border-radius: 18px; padding: 26px 30px; color: #fff;
-    background: linear-gradient(120deg,#0b3d91 0%,#1a73e8 45%,#00c2a8 100%);
+    border-radius: 6px; padding: 26px 30px; color: #fff; position: relative;
+    overflow: hidden; border:1px solid var(--neon);
+    background: linear-gradient(120deg,#0a0c16 0%,#14123f 55%,#0a0c16 100%);
     background-size: 200% 200%; animation: wcflow 12s ease infinite;
-    box-shadow: 0 10px 30px rgba(11,61,145,0.35); position: relative;
-    overflow: hidden;
+    box-shadow: 0 0 22px rgba(111,91,255,.5), inset 0 0 22px rgba(111,91,255,.12);
   }
   @keyframes wcflow { 0%{background-position:0% 50%} 50%{background-position:100% 50%}
                       100%{background-position:0% 50%} }
-  .wc-hero h1 { margin:0; font-size:30px; }
-  .wc-hero p { margin:6px 0 0; opacity:.9; }
-  .wc-hero .ball { position:absolute; right:24px; top:18px; font-size:64px;
-                   animation: spin 8s linear infinite; }
+  .wc-hero h1 { margin:0; font-family:var(--pixel); font-size:20px; line-height:1.5;
+                text-shadow:0 0 8px var(--neon),0 0 18px rgba(111,91,255,.7); }
+  .wc-hero p { margin:12px 0 0; opacity:.92; font-family:var(--tech);
+               letter-spacing:.04em; color:var(--neon2); }
+  .wc-hero .ball { position:absolute; right:24px; top:18px; font-size:60px;
+                   animation: spin 8s linear infinite;
+                   filter:drop-shadow(0 0 8px var(--neon2)); }
   @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
 
   /* podium */
@@ -70,32 +94,48 @@ st.markdown(
                  gap:18px; margin:18px 0 8px; flex-wrap:nowrap; }
   .podium { text-align:center; position:relative; }
   .pod-card { display:flex; flex-direction:column; align-items:center; gap:6px; }
-  .pod-name { font-weight:700; font-size:16px; }
-  .pod-pts { font-size:13px; opacity:.8; }
-  .pedestal { border-radius:14px 14px 6px 6px; width:120px;
+  .pod-name { font-weight:700; font-size:15px; font-family:var(--tech);
+              letter-spacing:.04em; }
+  .pod-pts { font-size:12px; opacity:.8; font-family:var(--tech); }
+  .pedestal { border-radius:4px 4px 0 0; width:120px;
               display:flex; align-items:flex-start; justify-content:center;
-              color:#08213f; font-weight:800; padding-top:8px; font-size:34px;
-              box-shadow: inset 0 -8px 0 rgba(0,0,0,0.12); }
+              color:#05060d; font-weight:800; padding-top:12px;
+              font-family:var(--pixel); font-size:20px; }
   .p1 .pedestal { height:150px; background:linear-gradient(180deg,#ffe27a,#f3b521);
-                  animation: glow 2.4s ease-in-out infinite; }
-  .p2 .pedestal { height:110px; background:linear-gradient(180deg,#e9eef3,#b8c2cc); }
-  .p3 .pedestal { height:88px;  background:linear-gradient(180deg,#f0b483,#cd7f32); }
-  @keyframes glow { 0%,100%{box-shadow:inset 0 -8px 0 rgba(0,0,0,.12),
-        0 0 0 rgba(243,181,33,0)} 50%{box-shadow:inset 0 -8px 0 rgba(0,0,0,.12),
-        0 0 28px rgba(243,181,33,.8)} }
-  .crown { font-size:30px; animation: bob 2s ease-in-out infinite; }
+                  border:1px solid var(--gold); animation: glow 2.4s ease-in-out infinite; }
+  .p2 .pedestal { height:110px; background:linear-gradient(180deg,#e9edf6,#aeb9cc);
+                  border:1px solid #c7d0e0; box-shadow:0 0 14px rgba(199,208,224,.5); }
+  .p3 .pedestal { height:88px;  background:linear-gradient(180deg,#f0b483,#cd7f32);
+                  border:1px solid #e08a3c; box-shadow:0 0 14px rgba(224,138,60,.5); }
+  @keyframes glow { 0%,100%{box-shadow:0 0 16px rgba(255,210,63,.6)}
+        50%{box-shadow:0 0 34px rgba(255,210,63,.95)} }
+  .crown { font-size:30px; animation: bob 2s ease-in-out infinite;
+           filter:drop-shadow(0 0 8px rgba(255,210,63,.8)); }
   @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
-  .jersey-badge { filter: drop-shadow(0 4px 6px rgba(0,0,0,.25)); }
-  .spark { position:absolute; width:8px; height:8px; border-radius:50%;
-           background:#fff; opacity:.0; animation: sparkle 2.2s linear infinite; }
+  .jersey-badge { filter: drop-shadow(0 0 7px rgba(111,91,255,.7)); }
+  .spark { position:absolute; width:7px; height:7px; border-radius:0;
+           background:var(--neon2); box-shadow:0 0 8px var(--neon2);
+           opacity:.0; animation: sparkle 2.2s linear infinite; }
   @keyframes sparkle { 0%{opacity:0; transform:scale(.4) translateY(0)}
         30%{opacity:1} 100%{opacity:0; transform:scale(1.1) translateY(-26px)} }
-  .lock-banner { border-radius:12px; padding:10px 16px; font-weight:600;
-                 margin-bottom:10px; }
-  .lock-on  { background:#fde7e7; color:#a11; border:1px solid #f3b1b1; }
-  .lock-off { background:#e7f7ee; color:#0a6b3c; border:1px solid #a9ddc1; }
-  .id-card { background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.12);
-             border-radius:14px; padding:12px; text-align:center; }
+  .lock-banner { border-radius:4px; padding:10px 16px; font-weight:600;
+                 margin-bottom:10px; font-family:var(--tech); letter-spacing:.04em; }
+  .lock-on  { background:rgba(255,60,90,.10); color:#ff6b86;
+              border:1px solid #ff4d6d; box-shadow:0 0 12px rgba(255,77,109,.4); }
+  .lock-off { background:rgba(41,240,255,.08); color:var(--neon2);
+              border:1px solid var(--neon2); box-shadow:0 0 12px rgba(41,240,255,.35); }
+  .id-card { background:#11152a; border:1px solid var(--neon);
+             border-radius:6px; padding:12px; text-align:center;
+             box-shadow:0 0 12px rgba(111,91,255,.4), inset 0 0 12px rgba(111,91,255,.08); }
+  .wc-badge { display:inline-block; padding:2px 10px; border-radius:3px;
+              background:transparent; border:1px solid var(--neon2);
+              color:var(--neon2); font-size:12px; font-weight:600; font-family:var(--tech); }
+  /* headings + primary buttons get the futuristic treatment */
+  h1, h2, h3 { font-family:var(--tech) !important; letter-spacing:.03em; }
+  .stButton button[kind="primary"], .stFormSubmitButton button[kind="primary"] {
+      border:1px solid var(--neon) !important;
+      box-shadow:0 0 12px rgba(111,91,255,.5) !important;
+      font-family:var(--tech) !important; letter-spacing:.04em; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -129,7 +169,7 @@ def editing_open() -> bool:
 
 def jersey_img(primary, secondary, pattern, size=64, cls="jersey-badge"):
     uri = avatar.data_uri(
-        primary or "#2f81f7", secondary or "#ffffff", pattern or "solid", size
+        primary or "#1801B4", secondary or "#ffffff", pattern or "solid", size
     )
     return f'<img class="{cls}" src="{uri}" width="{size}" height="{size}" />'
 
@@ -209,6 +249,8 @@ with st.sidebar:
             "🎯 Match picks",
             "🏆 Outcomes",
             "🃏 Wildcards",
+            "🗳️ Predictions",
+            "📅 Matches & results",
             "📊 Leaderboard",
             "🔐 Admin",
         ],
@@ -231,6 +273,60 @@ def lock_banner():
             '<div class="lock-banner lock-off">✏️ Predictions are OPEN — you can edit until the organiser locks them.</div>',
             unsafe_allow_html=True,
         )
+
+
+GROUPS_AL = [chr(c) for c in range(ord("A"), ord("L") + 1)]
+
+
+def group_tile_picker(state_key: str, options=None, prefix="Group "):
+    """Render a tile-style row of group buttons; return the selected option."""
+    options = options or GROUPS_AL
+    ss().setdefault(state_key, options[0])
+    rows = [options[i:i + 6] for i in range(0, len(options), 6)]
+    for rowg in rows:
+        cols = st.columns(6)
+        for i, g in enumerate(rowg):
+            label = g if prefix == "" else f"{prefix}{g}"
+            typ = "primary" if ss()[state_key] == g else "secondary"
+            if cols[i].button(label, key=f"{state_key}_{g}", type=typ,
+                              use_container_width=True):
+                ss()[state_key] = g
+                st.rerun()
+    return ss()[state_key]
+
+
+def group_standings(gcode):
+    """Compute W/D/L, GF/GA/GD, Pts for a group from recorded match_results."""
+    names = {r["team_id"]: r["name"] for r in conn.execute("SELECT team_id, name FROM teams")}
+    teams = [r["name"] for r in conn.execute(
+        "SELECT name FROM teams WHERE group_code=? ORDER BY name", (gcode,))]
+    tbl = {t: dict(team=t, P=0, W=0, D=0, L=0, GF=0, GA=0, GD=0, Pts=0) for t in teams}
+    q = """SELECT m.home_team_id AS h, m.away_team_id AS a,
+                  r.home_goals AS hg, r.away_goals AS ag
+           FROM matches m JOIN match_results r ON r.match_id = m.match_id
+           WHERE m.group_code=?"""
+    for r in conn.execute(q, (gcode,)):
+        home, away = names.get(r["h"]), names.get(r["a"])
+        if home not in tbl or away not in tbl:
+            continue
+        hg, ag = r["hg"], r["ag"]
+        for t, gf, ga in ((home, hg, ag), (away, ag, hg)):
+            tbl[t]["P"] += 1
+            tbl[t]["GF"] += gf
+            tbl[t]["GA"] += ga
+            tbl[t]["GD"] = tbl[t]["GF"] - tbl[t]["GA"]
+        if hg > ag:
+            tbl[home]["W"] += 1; tbl[home]["Pts"] += 3; tbl[away]["L"] += 1
+        elif hg < ag:
+            tbl[away]["W"] += 1; tbl[away]["Pts"] += 3; tbl[home]["L"] += 1
+        else:
+            tbl[home]["D"] += 1; tbl[away]["D"] += 1
+            tbl[home]["Pts"] += 1; tbl[away]["Pts"] += 1
+    return sorted(tbl.values(), key=lambda x: (-x["Pts"], -x["GD"], -x["GF"], x["team"]))
+
+
+def match_label(m):
+    return f"{m['home_label']} vs {m['away_label']}"
 
 
 # =========================================================================== #
@@ -294,7 +390,7 @@ elif page == "👤 My profile":
             fp = st.text_input("Favorite player", value=r["favorite_player"] or "")
             st.markdown("**Design your kit**")
             cc1, cc2 = st.columns(2)
-            prim = cc1.color_picker("Primary colour", r["shirt_primary"] or "#2f81f7")
+            prim = cc1.color_picker("Primary colour", r["shirt_primary"] or "#1801B4")
             sec = cc2.color_picker(
                 "Secondary colour", r["shirt_secondary"] or "#ffffff"
             )
@@ -411,12 +507,11 @@ elif page == "🎯 Match picks":
                 )
                 if submitted:
                     for mid, hv, av in picks:
-                        conn.execute(
-                            "INSERT OR REPLACE INTO match_predictions "
-                            "(participant_id, match_id, pred_home, pred_away, pred_advance, submitted_at) "
-                            "VALUES (?,?,?,?,?,?)",
-                            (pid, mid, int(hv), int(av), None, dbmod.now_iso()),
-                        )
+                        upsert(conn, "match_predictions", {
+                            "participant_id": pid, "match_id": mid,
+                            "pred_home": int(hv), "pred_away": int(av),
+                            "pred_advance": None, "submitted_at": dbmod.now_iso(),
+                        }, ["participant_id", "match_id"])
                     conn.commit()
                     st.success(f"Group {g} picks locked in! ⚽")
         else:
@@ -466,12 +561,11 @@ elif page == "🎯 Match picks":
                     f"🔒 Lock in {stage} picks", type="primary", disabled=not can_edit
                 ):
                     for mid, hv, av in picks:
-                        conn.execute(
-                            "INSERT OR REPLACE INTO match_predictions "
-                            "(participant_id, match_id, pred_home, pred_away, pred_advance, submitted_at) "
-                            "VALUES (?,?,?,?,?,?)",
-                            (pid, mid, int(hv), int(av), None, dbmod.now_iso()),
-                        )
+                        upsert(conn, "match_predictions", {
+                            "participant_id": pid, "match_id": mid,
+                            "pred_home": int(hv), "pred_away": int(av),
+                            "pred_advance": None, "submitted_at": dbmod.now_iso(),
+                        }, ["participant_id", "match_id"])
                     conn.commit()
                     st.success(f"{stage} picks locked in!")
 
@@ -548,12 +642,10 @@ elif page == "🏆 Outcomes":
                 rows += [("group_winner", g, t) for g, t in gw.items()]
                 for cat, ref, val in rows:
                     if str(val).strip():
-                        conn.execute(
-                            "INSERT OR REPLACE INTO outcome_predictions "
-                            "(participant_id, category, ref, value, submitted_at) VALUES (?,?,?,?,?)",
-                            (pid, cat, ref, str(val).strip(), dbmod.now_iso()),
-                        )
-                conn.commit()
+                        upsert(conn, "outcome_predictions", {
+                            "participant_id": pid, "category": cat, "ref": ref,
+                            "value": str(val).strip(), "submitted_at": dbmod.now_iso(),
+                        }, ["participant_id", "category", "ref"])
                 st.success("Outcome picks locked in! 🏆")
 
 # =========================================================================== #
@@ -604,13 +696,150 @@ elif page == "🃏 Wildcards":
             if st.form_submit_button("🔒 Lock in wildcards", type="primary"):
                 for wid, val in answers.items():
                     if str(val).strip():
-                        conn.execute(
-                            "INSERT OR REPLACE INTO wildcard_predictions "
-                            "(participant_id, wildcard_id, value, submitted_at) VALUES (?,?,?,?)",
-                            (pid, wid, str(val).strip(), dbmod.now_iso()),
-                        )
-                conn.commit()
+                        upsert(conn, "wildcard_predictions", {
+                            "participant_id": pid, "wildcard_id": wid,
+                            "value": str(val).strip(), "submitted_at": dbmod.now_iso(),
+                        }, ["participant_id", "wildcard_id"])
                 st.success("Wildcards locked in! 🃏")
+
+# =========================================================================== #
+# PREDICTIONS  (own anytime; everyone's only after the lock)
+# =========================================================================== #
+elif page == "🗳️ Predictions":
+    st.header("🗳️ Predictions")
+    locked = dbmod.predictions_locked(conn)
+    if not logged_in():
+        need_login()
+    else:
+        if not locked:
+            st.info("You can review **your own** predictions here. Everyone "
+                    "else's unlock automatically once the organiser locks "
+                    "predictions — no peeking before then. 🙈")
+        modes = ["My predictions"] + (["Compare everyone"] if locked else [])
+        mode = st.radio("View", modes, horizontal=True)
+        cat = st.radio("Category", ["Match picks", "Outcomes", "Wildcards"],
+                       horizontal=True)
+        players = [(r["participant_id"], r["name"]) for r in conn.execute(
+            "SELECT participant_id, name FROM participants ORDER BY name")]
+
+        OUTCOME_ORDER = [("🥇 Champion", "champion", ""), ("🥈 Runner-up", "runner_up", ""),
+                         ("🥉 Third", "third_place", ""), ("Finalist 1", "finalist", "1"),
+                         ("Finalist 2", "finalist", "2"), ("Golden Boot", "golden_boot", "")]
+
+        def render_one(pid, name):
+            if cat == "Match picks":
+                g = group_tile_picker("pred_grp")
+                ms = conn.execute(
+                    "SELECT * FROM matches WHERE group_code=? ORDER BY matchday, match_id", (g,)).fetchall()
+                pr = {x["match_id"]: x for x in conn.execute(
+                    "SELECT * FROM match_predictions WHERE participant_id=?", (pid,))}
+                rows = []
+                for m in ms:
+                    p = pr.get(m["match_id"])
+                    rows.append({"Match": match_label(m),
+                                 "Pick": f"{p['pred_home']}–{p['pred_away']}" if p else "—"})
+                st.dataframe(rows, hide_index=True, use_container_width=True)
+            elif cat == "Outcomes":
+                ex = {(r["category"], r["ref"]): r["value"] for r in conn.execute(
+                    "SELECT * FROM outcome_predictions WHERE participant_id=?", (pid,))}
+                rows = [{"Prediction": lbl, "Pick": ex.get((c, rf), "—")}
+                        for lbl, c, rf in OUTCOME_ORDER]
+                for gc in GROUPS_AL:
+                    rows.append({"Prediction": f"Winner {gc}", "Pick": ex.get(("group_winner", gc), "—")})
+                st.dataframe(rows, hide_index=True, use_container_width=True)
+            else:
+                ex = {r["wildcard_id"]: r["value"] for r in conn.execute(
+                    "SELECT * FROM wildcard_predictions WHERE participant_id=?", (pid,))}
+                rows = [{"Question": w["question"], "Answer": ex.get(w["wildcard_id"], "—")}
+                        for w in conn.execute("SELECT * FROM wildcards ORDER BY wildcard_id")]
+                st.dataframe(rows, hide_index=True, use_container_width=True)
+
+        if mode == "My predictions":
+            st.caption(f"Showing **{ss().pname}**")
+            render_one(ss().pid, ss().pname)
+        else:  # Compare everyone (locked only)
+            if cat == "Match picks":
+                g = group_tile_picker("pred_grp")
+                ms = conn.execute(
+                    "SELECT * FROM matches WHERE group_code=? ORDER BY matchday, match_id", (g,)).fetchall()
+                cols = {m["match_id"]: f"{(m['home_label'] or '')[:3]}–{(m['away_label'] or '')[:3]}" for m in ms}
+                allpred = {}
+                for x in conn.execute("SELECT * FROM match_predictions"):
+                    allpred[(x["participant_id"], x["match_id"])] = x
+                rows = []
+                for pid, name in players:
+                    row = {"Player": name}
+                    for m in ms:
+                        p = allpred.get((pid, m["match_id"]))
+                        row[cols[m["match_id"]]] = f"{p['pred_home']}–{p['pred_away']}" if p else "—"
+                    rows.append(row)
+                st.dataframe(rows, hide_index=True, use_container_width=True)
+            elif cat == "Outcomes":
+                allo = {}
+                for r in conn.execute("SELECT * FROM outcome_predictions"):
+                    allo[(r["participant_id"], r["category"], r["ref"])] = r["value"]
+                rows = []
+                for pid, name in players:
+                    row = {"Player": name}
+                    for lbl, c, rf in OUTCOME_ORDER:
+                        row[lbl] = allo.get((pid, c, rf), "—")
+                    rows.append(row)
+                st.dataframe(rows, hide_index=True, use_container_width=True)
+            else:
+                wq = [(w["wildcard_id"], w["question"]) for w in conn.execute(
+                    "SELECT * FROM wildcards ORDER BY wildcard_id")]
+                allw = {}
+                for r in conn.execute("SELECT * FROM wildcard_predictions"):
+                    allw[(r["participant_id"], r["wildcard_id"])] = r["value"]
+                rows = []
+                for pid, name in players:
+                    row = {"Player": name}
+                    for wid, q in wq:
+                        row[wid] = allw.get((pid, wid), "—")
+                    rows.append(row)
+                st.caption("Columns are wildcard IDs (W01–W08) — see the Wildcards page for the questions.")
+                st.dataframe(rows, hide_index=True, use_container_width=True)
+
+# =========================================================================== #
+# MATCHES & RESULTS  (per group, tile filter + standings)
+# =========================================================================== #
+elif page == "📅 Matches & results":
+    st.header("📅 Matches & results")
+    g = group_tile_picker("mr_grp")
+    names = {r["team_id"]: r["name"] for r in conn.execute("SELECT team_id, name FROM teams")}
+    st.subheader(f"Group {g} — standings")
+    standings = group_standings(g)
+    st.dataframe(
+        [{"Team": s["team"], "P": s["P"], "W": s["W"], "D": s["D"], "L": s["L"],
+          "GF": s["GF"], "GA": s["GA"], "GD": s["GD"], "Pts": s["Pts"]}
+         for s in standings],
+        hide_index=True, use_container_width=True)
+    st.caption("Top 2 of each group advance, plus the 8 best third-placed teams.")
+
+    st.subheader(f"Group {g} — fixtures")
+    res = {r["match_id"]: r for r in conn.execute("SELECT * FROM match_results")}
+    frows = []
+    for m in conn.execute(
+            "SELECT * FROM matches WHERE group_code=? ORDER BY matchday, match_id", (g,)):
+        r = res.get(m["match_id"])
+        score = f"{r['home_goals']} – {r['away_goals']}" if r else "— vs —"
+        frows.append({"MD": m["matchday"], "Home": m["home_label"],
+                      "Score": score, "Away": m["away_label"],
+                      "Date": (m["kickoff_utc"] or "")[:10]})
+    st.dataframe(frows, hide_index=True, use_container_width=True)
+
+    with st.expander("Knockout results"):
+        krows = []
+        for m in conn.execute(
+                "SELECT * FROM matches WHERE is_knockout=1 ORDER BY match_id"):
+            r = res.get(m["match_id"])
+            if not r:
+                continue
+            krows.append({"Stage": m["stage"], "Home": m["home_label"],
+                          "Score": f"{r['home_goals']} – {r['away_goals']}",
+                          "Away": m["away_label"]})
+        st.dataframe(krows, hide_index=True, use_container_width=True) if krows \
+            else st.caption("No knockout results entered yet.")
 
 # =========================================================================== #
 # LEADERBOARD
@@ -639,7 +868,7 @@ elif page == "📊 Leaderboard":
             r = top[slot]
             pr = profiles.get(r["participant_id"])
             jersey = jersey_img(
-                pr["shirt_primary"] if pr else "#2f81f7",
+                pr["shirt_primary"] if pr else "#1801B4",
                 pr["shirt_secondary"] if pr else "#fff",
                 pr["shirt_pattern"] if pr else "solid",
                 84,
@@ -750,12 +979,10 @@ elif page == "🔐 Admin":
             entries.append((m["match_id"], hg, ag))
         if st.form_submit_button("Save match results") and entries:
             for mid, hg, ag in entries:
-                conn.execute(
-                    "INSERT OR REPLACE INTO match_results (match_id, home_goals, away_goals, advance) "
-                    "VALUES (?,?,?,?)",
-                    (mid, int(hg), int(ag), None),
-                )
-            conn.commit()
+                upsert(conn, "match_results", {
+                    "match_id": mid, "home_goals": int(hg),
+                    "away_goals": int(ag), "advance": None,
+                }, ["match_id"])
             st.success(f"Saved {len(entries)} result(s).")
 
     st.divider()
@@ -796,11 +1023,9 @@ elif page == "🔐 Admin":
                 pairs += [("group_winner", g, t) for g, t in gwres.items() if t]
                 for cat, ref, val in pairs:
                     if str(val).strip():
-                        conn.execute(
-                            "INSERT OR REPLACE INTO outcome_results VALUES (?,?,?)",
-                            (cat, ref, str(val).strip()),
-                        )
-                conn.commit()
+                        upsert(conn, "outcome_results", {
+                            "category": cat, "ref": ref, "value": str(val).strip(),
+                        }, ["category", "ref"])
                 st.success("Outcome results saved.")
 
     with st.expander("Wildcard results"):
@@ -813,11 +1038,9 @@ elif page == "🔐 Admin":
             if st.form_submit_button("Save wildcard results"):
                 for wid, val in vals.items():
                     if str(val).strip():
-                        conn.execute(
-                            "INSERT OR REPLACE INTO wildcard_results VALUES (?,?)",
-                            (wid, str(val).strip()),
-                        )
-                conn.commit()
+                        upsert(conn, "wildcard_results", {
+                            "wildcard_id": wid, "value": str(val).strip(),
+                        }, ["wildcard_id"])
                 st.success("Wildcard results saved.")
 
     with st.expander("Reset a player's PIN"):
@@ -836,7 +1059,54 @@ elif page == "🔐 Admin":
                 st.success(f"PIN reset for {who}.")
 
     st.divider()
-    if st.button("🔄 Refresh dashboards (export CSV + JSON)"):
+    if st.button("🔄 Refresh dashboards (HTML + Power BI tables + CSV)"):
         export.export_csvs(conn)
         export.export_dashboard_json(conn)
-        st.success(f"Exported to {config.EXPORT_DIR} and {config.DASHBOARD_DIR}")
+        # publish scored tables (vw_leaderboard, ...) into the database so
+        # Power BI reads ready-computed standings
+        export.export_to_db(conn)
+        msg = "Refreshed HTML dashboard + CSV backup"
+        if conn.dialect == "postgresql":
+            msg += " + Power BI tables (vw_leaderboard, vw_match_points, vw_timeline)"
+        st.success(msg + ".")
+
+    st.divider()
+    st.subheader("Download backup")
+    st.caption("One ZIP with every table as CSV — works on the hosted app, no "
+               "local run needed. Grab one before/after the deadline to be safe.")
+    import io
+    import zipfile
+
+    def _csv_bytes(rows, cols):
+        import csv as _csv
+        buf = io.StringIO()
+        w = _csv.DictWriter(buf, fieldnames=cols)
+        w.writeheader()
+        for r in rows:
+            w.writerow({c: dict(r).get(c, "") for c in cols})
+        return buf.getvalue().encode("utf-8")
+
+    def _table(name):
+        rows = list(conn.execute(f"SELECT * FROM {name}"))
+        cols = list(rows[0].keys()) if rows else []
+        return rows, cols
+
+    if st.button("Prepare backup ZIP"):
+        zbuf = io.BytesIO()
+        tables = ["participants", "teams", "matches", "wildcards",
+                  "match_predictions", "outcome_predictions", "wildcard_predictions",
+                  "match_results", "outcome_results", "wildcard_results", "settings"]
+        with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as zf:
+            for t in tables:
+                rows, cols = _table(t)
+                if cols:
+                    zf.writestr(f"{t}.csv", _csv_bytes(rows, cols))
+            lb = scoring.leaderboard_rows(conn)
+            if lb:
+                zf.writestr("leaderboard.csv", _csv_bytes(lb, list(lb[0].keys())))
+        st.session_state["_backup_zip"] = zbuf.getvalue()
+        st.success("Backup ready — click below to download.")
+    if st.session_state.get("_backup_zip"):
+        st.download_button(
+            "⬇️ Download backup ZIP", data=st.session_state["_backup_zip"],
+            file_name="wc2026_backup.zip", mime="application/zip")

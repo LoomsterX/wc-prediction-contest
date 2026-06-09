@@ -168,7 +168,7 @@ def export_dashboard_json(conn: sqlite3.Connection) -> None:
         pass
     for r in lb:
         p = profiles.get(r["participant_id"], {})
-        r["shirt_primary"] = p.get("shirt_primary") or "#2f81f7"
+        r["shirt_primary"] = p.get("shirt_primary") or "#1801B4"
         r["shirt_secondary"] = p.get("shirt_secondary") or "#ffffff"
         r["shirt_pattern"] = p.get("shirt_pattern") or "solid"
         r["favorite_team"] = p.get("favorite_team") or ""
@@ -203,13 +203,47 @@ def export_dashboard_json(conn: sqlite3.Connection) -> None:
         json.dump(data, f, indent=2, ensure_ascii=False)
 
 
-def export_all(db_path=None) -> None:
+def export_to_db(conn) -> None:
+    """Write the *scored* tables back into the database so Power BI can read
+    already-computed standings directly (no CSV needed).
+
+    Creates/replaces three tables alongside the raw data:
+      vw_leaderboard      - one row per player with total + per-category points
+      vw_match_points     - one row per player x scored match (drill-down)
+      vw_timeline         - cumulative points per player per date
+    Power BI connects to these for a ready-made dashboard.
+    """
+    import pandas as pd
+
+    lb = scoring.leaderboard_rows(conn)
+    pm = _fact_match_points(conn)
+    tl = _fact_timeline(conn, pm)
+
+    frames = {
+        "vw_leaderboard": (lb, ["rank", "participant_id", "name", "total_points",
+                                "match_points", "outcome_points", "wildcard_points",
+                                "exact_score_hits"]),
+        "vw_match_points": (pm, ["participant_id", "name", "match_id", "date",
+                                 "stage", "points", "is_exact"]),
+        "vw_timeline": (tl, ["participant_id", "name", "date", "daily_points",
+                             "cumulative_points"]),
+    }
+    for name, (rows, cols) in frames.items():
+        df = pd.DataFrame(rows, columns=cols)
+        df.to_sql(name, conn.engine, if_exists="replace", index=False)
+
+
+def export_all(db_path=None, to_db=False) -> None:
     conn = dbmod.connect(db_path)
     export_csvs(conn)
     export_dashboard_json(conn)
+    if to_db:
+        export_to_db(conn)
     conn.close()
 
 
 if __name__ == "__main__":
-    export_all()
+    import os
+    # When pointed at a hosted DB, also publish the scored tables for Power BI.
+    export_all(to_db=bool(os.environ.get("DATABASE_URL")))
     print("Exports written to", config.EXPORT_DIR, "and", config.DASHBOARD_DIR)

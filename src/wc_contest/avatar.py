@@ -20,10 +20,10 @@ _RSLEEVE = "M65 17 L82 24 L89 41 L76 48 L68 43 L66 26 Z"
 _COLLAR = "M40 17 Q50 27 60 17 L56 15 Q50 20 44 15 Z"
 
 
-def jersey_svg(primary: str = "#2f81f7", secondary: str = "#ffffff",
+def jersey_svg(primary: str = "#1801B4", secondary: str = "#ffffff",
                pattern: str = "solid", size: int = 64,
                number: str | None = None) -> str:
-    p = html.escape(primary or "#2f81f7")
+    p = html.escape(primary or "#1801B4")
     s = html.escape(secondary or "#ffffff")
     pat = pattern if pattern in PATTERNS else "solid"
     cid = f"clip{abs(hash((p, s, pat, size))) % 100000}"

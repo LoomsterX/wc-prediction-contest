@@ -11,6 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 from wc_contest import db as dbmod, config, export  # noqa: E402
+from wc_contest.engine import upsert  # noqa: E402
 
 random.seed(2026)
 
@@ -50,10 +51,11 @@ def main():
     # everyone predicts every group match + outcomes + wildcards
     for name, pid in pids.items():
         for m in group_matches:
-            conn.execute(
-                "INSERT OR REPLACE INTO match_predictions VALUES (?,?,?,?,?,?)",
-                (pid, m["match_id"], random.randint(0, 3), random.randint(0, 3),
-                 None, dbmod.now_iso()))
+            upsert(conn, "match_predictions", {
+                "participant_id": pid, "match_id": m["match_id"],
+                "pred_home": random.randint(0, 3), "pred_away": random.randint(0, 3),
+                "pred_advance": None, "submitted_at": dbmod.now_iso(),
+            }, ["participant_id", "match_id"])
         # outcomes
         champ, ru, third = random.sample(teams, 3)
         sfs = random.sample(teams, 4)
@@ -65,9 +67,10 @@ def main():
         rows += [("group_winner", g, random.choice(ts))
                  for g, ts in group_teams.items()]
         for cat, ref, val in rows:
-            conn.execute(
-                "INSERT OR REPLACE INTO outcome_predictions VALUES (?,?,?,?,?)",
-                (pid, cat, ref, val, dbmod.now_iso()))
+            upsert(conn, "outcome_predictions", {
+                "participant_id": pid, "category": cat, "ref": ref,
+                "value": val, "submitted_at": dbmod.now_iso(),
+            }, ["participant_id", "category", "ref"])
         # wildcards
         for w in conn.execute("SELECT * FROM wildcards"):
             if w["type"] == "number":
@@ -77,25 +80,27 @@ def main():
                 v = random.choice(w["options"].split("|"))
             else:
                 v = random.choice(teams)
-            conn.execute(
-                "INSERT OR REPLACE INTO wildcard_predictions VALUES (?,?,?,?)",
-                (pid, w["wildcard_id"], v, dbmod.now_iso()))
+            upsert(conn, "wildcard_predictions", {
+                "participant_id": pid, "wildcard_id": w["wildcard_id"],
+                "value": v, "submitted_at": dbmod.now_iso(),
+            }, ["participant_id", "wildcard_id"])
 
     # enter results for matchday 1 + 2 so the timeline has movement
     played = conn.execute(
         "SELECT * FROM matches WHERE is_knockout=0 AND matchday IN (1,2)").fetchall()
     for m in played:
-        conn.execute(
-            "INSERT OR REPLACE INTO match_results VALUES (?,?,?,?)",
-            (m["match_id"], random.randint(0, 3), random.randint(0, 3), None))
+        upsert(conn, "match_results", {
+            "match_id": m["match_id"], "home_goals": random.randint(0, 3),
+            "away_goals": random.randint(0, 3), "advance": None,
+        }, ["match_id"])
 
     # a couple of wildcard results
-    conn.execute("INSERT OR REPLACE INTO wildcard_results VALUES ('W01','142')")
-    conn.execute("INSERT OR REPLACE INTO wildcard_results VALUES ('W05','UEFA')")
-    conn.commit()
+    upsert(conn, "wildcard_results", {"wildcard_id": "W01", "value": "142"}, ["wildcard_id"])
+    upsert(conn, "wildcard_results", {"wildcard_id": "W05", "value": "UEFA"}, ["wildcard_id"])
 
     export.export_csvs(conn)
     export.export_dashboard_json(conn)
+    export.export_to_db(conn)   # publish scored tables (also feeds Power BI)
     conn.close()
     print("Sample data loaded; exports + dashboard/data.json generated.")
     print(f"  CSVs:      {config.EXPORT_DIR}")

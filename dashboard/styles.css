@@ -1,0 +1,349 @@
+/* SoftwareOne brand — DARK / NEON / PIXEL theme
+   brand blue #1801B4 kept; neon derivatives for glow; futuristic pixel fonts.
+   Fonts (Press Start 2P, Orbitron) are loaded from index.html. */
+:root {
+  --s1-blue: #1801B4;
+  --neon: #6f5bff;          /* electric indigo (glowing brand blue) */
+  --neon-2: #29f0ff;        /* cyan accent */
+  --balihai: #8aa0c0;
+
+  --bg: #0a0c16;
+  --bg-2: #0f1324;
+  --card: #11152a;
+  --line: #243056;
+  --text: #e7eaf6;
+  --muted: #8aa0c0;
+  --gold: #ffd23f;
+  --silver: #c7d0e0;
+  --bronze: #e08a3c;
+
+  --pixel: "Press Start 2P", monospace;
+  --tech: "Orbitron", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--text);
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  background:
+    linear-gradient(rgba(111, 91, 255, .05) 1px, transparent 1px) 0 0 / 100% 28px,
+    radial-gradient(900px 480px at 50% -10%, rgba(111, 91, 255, .18), transparent 60%),
+    var(--bg);
+}
+
+/* ---- header ---- */
+header {
+  padding: 26px 32px;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(120deg, #0a0c16, #14123f 55%, #0a0c16);
+  border-bottom: 1px solid var(--neon);
+  box-shadow: 0 0 18px rgba(111, 91, 255, .45);
+}
+
+header h1 {
+  margin: 0;
+  font-family: var(--pixel);
+  font-size: 18px;
+  line-height: 1.5;
+  color: #fff;
+  text-shadow: 0 0 6px var(--neon), 0 0 16px rgba(111, 91, 255, .7);
+}
+
+header .meta {
+  color: var(--neon-2);
+  font-family: var(--tech);
+  font-size: 13px;
+  letter-spacing: .06em;
+  margin-top: 8px;
+}
+
+header .ball {
+  position: absolute;
+  right: 26px;
+  top: 18px;
+  font-size: 56px;
+  animation: spin 9s linear infinite;
+  filter: drop-shadow(0 0 8px var(--neon-2));
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+main {
+  padding: 26px 32px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.grid {
+  display: grid;
+  gap: 20px;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 880px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- neon panels (square, glowing borders) ---- */
+.card {
+  background: var(--card);
+  border: 1px solid var(--neon);
+  border-radius: 4px;
+  padding: 18px 20px;
+  box-shadow: 0 0 10px rgba(111, 91, 255, .35), inset 0 0 14px rgba(111, 91, 255, .07);
+}
+
+.card h2 {
+  margin: 0 0 14px;
+  font-family: var(--tech);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--neon-2);
+  text-transform: uppercase;
+  letter-spacing: .14em;
+  text-shadow: 0 0 6px rgba(41, 240, 255, .55);
+}
+
+.span2 {
+  grid-column: 1 / -1;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+th,
+td {
+  text-align: left;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+th {
+  color: var(--muted);
+  font-family: var(--tech);
+  font-weight: 700;
+  font-size: 11px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+td.num,
+th.num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-family: var(--tech);
+}
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+.rank {
+  font-weight: 700;
+  width: 36px;
+  font-family: var(--pixel);
+  font-size: 11px;
+}
+
+.r1 {
+  color: var(--gold);
+  text-shadow: 0 0 8px rgba(255, 210, 63, .7);
+}
+
+.r2 {
+  color: var(--silver);
+}
+
+.r3 {
+  color: var(--bronze);
+}
+
+.total {
+  font-weight: 700;
+  font-family: var(--tech);
+  color: var(--neon-2);
+  text-shadow: 0 0 6px rgba(41, 240, 255, .5);
+}
+
+.pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 3px;
+  background: transparent;
+  border: 1px solid var(--neon);
+  color: var(--neon);
+  font-family: var(--tech);
+  font-size: 11px;
+  letter-spacing: .05em;
+}
+
+.empty {
+  color: var(--muted);
+  padding: 24px 0;
+  text-align: center;
+}
+
+canvas {
+  max-height: 340px;
+}
+
+footer {
+  color: var(--muted);
+  font-size: 12px;
+  padding: 16px 32px;
+  font-family: var(--tech);
+  letter-spacing: .04em;
+}
+
+/* ---- podium ---- */
+.podium-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  gap: 22px;
+  padding: 14px 0 6px;
+}
+
+.podium {
+  text-align: center;
+  position: relative;
+}
+
+.crown {
+  font-size: 30px;
+  animation: bob 2s ease-in-out infinite;
+  filter: drop-shadow(0 0 8px rgba(255, 210, 63, .8));
+}
+
+@keyframes bob {
+
+  0%,
+  100% {
+    transform: translateY(0)
+  }
+
+  50% {
+    transform: translateY(-7px)
+  }
+}
+
+.jersey {
+  filter: drop-shadow(0 0 7px rgba(111, 91, 255, .7));
+}
+
+.pod-name {
+  font-weight: 700;
+  margin-top: 6px;
+  font-family: var(--tech);
+  letter-spacing: .04em;
+}
+
+.pod-pts {
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--tech);
+}
+
+.pedestal {
+  width: 128px;
+  border-radius: 4px 4px 0 0;
+  margin-top: 8px;
+  color: #05060d;
+  font-weight: 800;
+  font-family: var(--pixel);
+  font-size: 22px;
+  padding-top: 14px;
+  height: 90px;
+}
+
+.p1 .pedestal {
+  height: 150px;
+  background: linear-gradient(180deg, #ffe27a, #f3b521);
+  border: 1px solid var(--gold);
+  box-shadow: 0 0 22px rgba(255, 210, 63, .75);
+  animation: glow 2.6s ease-in-out infinite;
+}
+
+.p2 .pedestal {
+  height: 112px;
+  background: linear-gradient(180deg, #e9edf6, #aeb9cc);
+  border: 1px solid var(--silver);
+  box-shadow: 0 0 14px rgba(199, 208, 224, .5);
+}
+
+.p3 .pedestal {
+  height: 90px;
+  background: linear-gradient(180deg, #f0b483, #cd7f32);
+  border: 1px solid var(--bronze);
+  box-shadow: 0 0 14px rgba(224, 138, 60, .5);
+}
+
+@keyframes glow {
+
+  0%,
+  100% {
+    box-shadow: 0 0 16px rgba(255, 210, 63, .6)
+  }
+
+  50% {
+    box-shadow: 0 0 34px rgba(255, 210, 63, .95)
+  }
+}
+
+.spark {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 0;
+  background: var(--neon-2);
+  box-shadow: 0 0 8px var(--neon-2);
+  opacity: 0;
+  animation: sparkle 2.2s linear infinite;
+}
+
+@keyframes sparkle {
+  0% {
+    opacity: 0;
+    transform: scale(.4) translateY(0)
+  }
+
+  30% {
+    opacity: 1
+  }
+
+  100% {
+    opacity: 0;
+    transform: scale(1.1) translateY(-28px)
+  }
+}
+
+.confetti {
+  position: fixed;
+  top: -12px;
+  width: 8px;
+  height: 8px;
+  opacity: .9;
+  animation: fall linear forwards;
+  z-index: 50;
+}
+
+@keyframes fall {
+  to {
+    transform: translateY(105vh) rotate(720deg);
+    opacity: .6;
+  }
+}

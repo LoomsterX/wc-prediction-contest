@@ -78,6 +78,16 @@ uv run streamlit run app/streamlit_app.py
 `main.py score` prints the leaderboard to the terminal, and `main.py export`
 refreshes the dashboards — but day to day you'll just use the app.
 
+### Run it online for everyone (Supabase + Streamlit Cloud)
+
+By default the app stores data in a local SQLite file. To host it online so
+colleagues submit from anywhere, set a `DATABASE_URL` and the same code runs on
+a free **Supabase** Postgres database, with **Power BI** connecting directly to
+live, already-scored tables (`vw_leaderboard`, `vw_match_points`, `vw_timeline`).
+Step-by-step: **[SUPABASE_SETUP.md](SUPABASE_SETUP.md)** for the database, then
+**[DEPLOY_STREAMLIT.md](DEPLOY_STREAMLIT.md)** to host the app free on Streamlit
+Community Cloud. CSV export remains your backup.
+
 ## Running the contest
 
 **Before kickoff (by 11 June 2026)**
