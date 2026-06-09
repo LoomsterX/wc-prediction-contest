@@ -149,10 +149,15 @@ st.markdown(
       font-family:var(--tech) !important; letter-spacing:.04em; }
 
   /* ---- top header navigation ---- */
-  .st-key-nav_full [data-testid="stVerticalBlock"]{
-      flex-direction:row !important; flex-wrap:wrap; gap:8px; align-items:center;
-      row-gap:8px; }
-  .st-key-nav_full [data-testid="stElementContainer"]{ width:auto !important; }
+  /* the key class sits on the vertical block itself (and/or a wrapper); force
+     a horizontal, wrapping row either way */
+  .st-key-nav_full,
+  .st-key-nav_full > div[data-testid="stVerticalBlock"]{
+      display:flex !important; flex-direction:row !important; flex-wrap:wrap !important;
+      gap:8px !important; align-items:center; }
+  .st-key-nav_full div[data-testid="stElementContainer"]{
+      width:auto !important; flex:0 0 auto !important; }
+  .st-key-nav_full div[data-testid="stElementContainer"] .stButton{ width:auto !important; }
   /* nav item boxes */
   .st-key-nav_full .stButton button, .st-key-nav_burger .stButton button{
       font-family:var(--tech) !important; letter-spacing:.02em; font-weight:600;
