@@ -43,6 +43,15 @@ try:
 except Exception:
     pass
 
+# Optional invite code required to create a new account, so only people you
+# share it with can join. From the SIGNUP_KEY secret / env var. If unset,
+# sign-up is open (no code required).
+SIGNUP_KEY = os.environ.get("SIGNUP_KEY")
+try:
+    SIGNUP_KEY = st.secrets.get("SIGNUP_KEY", SIGNUP_KEY)
+except Exception:
+    pass
+
 st.set_page_config(
     page_title="WC 2026 Prediction Contest", page_icon="⚽", layout="wide"
 )
@@ -138,6 +147,35 @@ st.markdown(
       border:1px solid var(--neon) !important;
       box-shadow:0 0 12px rgba(111,91,255,.5) !important;
       font-family:var(--tech) !important; letter-spacing:.04em; }
+
+  /* ---- top header navigation ---- */
+  .st-key-nav_full [data-testid="stVerticalBlock"]{
+      flex-direction:row !important; flex-wrap:wrap; gap:8px; align-items:center;
+      row-gap:8px; }
+  .st-key-nav_full [data-testid="stElementContainer"]{ width:auto !important; }
+  /* nav item boxes */
+  .st-key-nav_full .stButton button, .st-key-nav_burger .stButton button{
+      font-family:var(--tech) !important; letter-spacing:.02em; font-weight:600;
+      border:1px solid var(--line) !important; border-radius:6px !important;
+      background:#11152a !important; color:#cdd6f4 !important;
+      padding:6px 14px !important; transition:all .15s ease; box-shadow:none !important; }
+  .st-key-nav_full .stButton button:hover, .st-key-nav_burger .stButton button:hover{
+      border-color:var(--neon2) !important; color:#fff !important;
+      box-shadow:0 0 12px rgba(41,240,255,.45) !important; transform:translateY(-1px); }
+  /* active item (rendered as a primary button) */
+  .st-key-nav_full .stButton button[kind="primary"],
+  .st-key-nav_burger .stButton button[kind="primary"]{
+      background:linear-gradient(180deg,#1801B4,#3a23c9) !important;
+      border:1px solid var(--neon) !important; color:#fff !important;
+      box-shadow:0 0 16px rgba(111,91,255,.65) !important; }
+  .nav-bar{ border-bottom:1px solid var(--neon); padding:6px 0 12px; margin-bottom:14px;
+            box-shadow:0 6px 18px -12px rgba(111,91,255,.6); }
+  /* responsive: inline bar on wide screens, hamburger on small */
+  .st-key-nav_burger{ display:none; }
+  @media (max-width: 820px){
+      .st-key-nav_full{ display:none; }
+      .st-key-nav_burger{ display:block; }
+  }
 </style>
 """,
     unsafe_allow_html=True,
@@ -228,11 +266,18 @@ with st.sidebar:
             nn = st.text_input("Display name", key="new_name")
             np1 = st.text_input("Choose a PIN", type="password", key="new_pin")
             np2 = st.text_input("Confirm PIN", type="password", key="new_pin2")
+            invite = ""
+            if SIGNUP_KEY:
+                invite = st.text_input("Invite code", type="password",
+                                       key="new_invite",
+                                       help="Ask the organiser for the code.")
             if st.button("Create account", use_container_width=True):
                 if not nn.strip() or not np1:
                     st.warning("Name and PIN required.")
                 elif np1 != np2:
                     st.warning("PINs don't match.")
+                elif SIGNUP_KEY and invite.strip() != SIGNUP_KEY:
+                    st.error("Wrong invite code — ask the organiser.")
                 else:
                     try:
                         pid = dbmod.create_participant(conn, nn.strip(), np1)
@@ -241,23 +286,6 @@ with st.sidebar:
                         st.rerun()
                     except Exception:
                         st.warning("That name is already taken.")
-
-    st.divider()
-    page = st.radio(
-        "Go to",
-        [
-            "🏠 Home",
-            "👤 My profile",
-            "🎯 Match picks",
-            "🏆 Outcomes",
-            "🃏 Wildcards",
-            "🗳️ Predictions",
-            "📅 Matches & results",
-            "📊 Leaderboard",
-            "🔐 Admin",
-        ],
-        label_visibility="collapsed",
-    )
 
 
 def need_login():
@@ -330,6 +358,36 @@ def group_standings(gcode):
 def match_label(m):
     return f"{m['home_label']} vs {m['away_label']}"
 
+
+# --------------------------------------------------------------------------- #
+# Top header navigation (boxes + hover/active; hamburger on small screens)
+# --------------------------------------------------------------------------- #
+PAGES = ["🏠 Home", "👤 My profile", "🎯 Match picks", "🏆 Outcomes",
+         "🃏 Wildcards", "🗳️ Predictions", "📅 Matches & results",
+         "📊 Leaderboard", "🔐 Admin"]
+ss().setdefault("nav_page", PAGES[0])
+
+
+def _nav_buttons(prefix):
+    for p in PAGES:
+        if st.button(p, key=f"{prefix}_{p}",
+                     type="primary" if ss().nav_page == p else "secondary",
+                     use_container_width=(prefix == "burger")):
+            ss().nav_page = p
+            st.rerun()
+
+
+def render_top_nav():
+    st.markdown('<div class="nav-bar"></div>', unsafe_allow_html=True)
+    with st.container(key="nav_full"):
+        _nav_buttons("nav")
+    with st.container(key="nav_burger"):
+        with st.popover("☰ Menu", use_container_width=True):
+            _nav_buttons("burger")
+    return ss().nav_page
+
+
+page = render_top_nav()
 
 # =========================================================================== #
 # HOME
@@ -1049,20 +1107,63 @@ elif page == "🔐 Admin":
                         }, ["wildcard_id"])
                 st.success("Wildcard results saved.")
 
-    with st.expander("Reset a player's PIN"):
-        pnames = [
-            r["name"]
-            for r in conn.execute("SELECT name FROM participants ORDER BY name")
-        ]
-        if pnames:
-            who = st.selectbox("Player", pnames, key="pinreset_who")
-            newpin = st.text_input("New PIN", key="pinreset_pin")
-            if st.button("Reset PIN") and newpin:
-                pid = conn.execute(
-                    "SELECT participant_id FROM participants WHERE name=?", (who,)
-                ).fetchone()[0]
-                dbmod.set_pin(conn, pid, newpin)
-                st.success(f"PIN reset for {who}.")
+    st.divider()
+    st.subheader("👥 Manage users")
+    users = list(conn.execute(
+        "SELECT * FROM participants ORDER BY name"))
+    if not users:
+        st.caption("No players yet.")
+    else:
+        umap = {u["name"]: u for u in users}
+        who = st.selectbox("Select player", list(umap.keys()), key="mu_who")
+        u = umap[who]
+        upid = u["participant_id"]
+        c1, c2 = st.columns([3, 1])
+        with c2:
+            st.markdown(
+                f'<div style="text-align:center">{jersey_img(u["shirt_primary"], u["shirt_secondary"], u["shirt_pattern"], 110)}</div>',
+                unsafe_allow_html=True)
+        with c1:
+            with st.form("mu_edit"):
+                new_name = st.text_input("Display name", value=u["name"])
+                new_email = st.text_input("Email", value=u["email"] or "")
+                teams = [""] + team_options()
+                ft = st.selectbox("Favorite team", teams,
+                                  index=teams.index(u["favorite_team"]) if u["favorite_team"] in teams else 0)
+                fp = st.text_input("Favorite player", value=u["favorite_player"] or "")
+                jc1, jc2 = st.columns(2)
+                prim = jc1.color_picker("Primary", u["shirt_primary"] or "#1801B4")
+                sec = jc2.color_picker("Secondary", u["shirt_secondary"] or "#ffffff")
+                pat = st.radio("Pattern", avatar.PATTERNS,
+                               index=avatar.PATTERNS.index(u["shirt_pattern"])
+                               if u["shirt_pattern"] in avatar.PATTERNS else 0,
+                               horizontal=True)
+                if st.form_submit_button("💾 Save changes", type="primary"):
+                    try:
+                        if new_name.strip() and new_name.strip() != u["name"]:
+                            dbmod.rename_participant(conn, upid, new_name.strip())
+                        dbmod.update_profile(conn, upid, favorite_team=ft,
+                                             favorite_player=fp, email=new_email,
+                                             shirt_primary=prim, shirt_secondary=sec,
+                                             shirt_pattern=pat)
+                        st.success(f"Saved changes for {new_name.strip() or who}.")
+                        st.rerun()
+                    except Exception:
+                        st.error("Could not save — is that display name already taken?")
+
+        st.markdown("**Reset actions**")
+        rc1, rc2 = st.columns(2)
+        with rc1:
+            if st.button("♻️ Reset profile to defaults", use_container_width=True):
+                dbmod.reset_profile(conn, upid)
+                st.success(f"Profile reset for {who} (predictions kept).")
+                st.rerun()
+        with rc2:
+            with st.popover("🔑 Reset PIN", use_container_width=True):
+                newpin = st.text_input("New PIN", type="password", key="mu_pin")
+                if st.button("Set new PIN") and newpin:
+                    dbmod.set_pin(conn, upid, newpin)
+                    st.success(f"PIN reset for {who}.")
 
     st.divider()
     if st.button("🔄 Refresh dashboards (HTML + Power BI tables + CSV)"):

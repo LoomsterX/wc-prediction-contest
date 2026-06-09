@@ -69,6 +69,7 @@ setup or a full reset — never mid-contest.
    ```toml
    DATABASE_URL = "postgresql://postgres.<ref>:<pwd>@aws-0-<region>.pooler.supabase.com:5432/postgres"
    ADMIN_PASSWORD = "choose-something-strong"
+   SIGNUP_KEY = "invite-code-for-colleagues"   # optional; gate who can sign up
    ```
 
 4. Deploy. The app detects `DATABASE_URL` and uses Supabase automatically; share

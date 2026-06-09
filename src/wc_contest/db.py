@@ -104,6 +104,20 @@ def set_pin(conn, pid, pin) -> None:
                  (hash_pin(pin), pid))
 
 
+def rename_participant(conn, pid, new_name) -> None:
+    conn.execute("UPDATE participants SET name=? WHERE participant_id=?",
+                 (new_name, pid))
+
+
+def reset_profile(conn, pid) -> None:
+    """Admin: clear a player's profile customisation back to defaults
+    (does not touch their predictions or PIN)."""
+    conn.execute(
+        "UPDATE participants SET favorite_team='', favorite_player='', "
+        "shirt_primary='#1801B4', shirt_secondary='#ffffff', shirt_pattern='solid' "
+        "WHERE participant_id=?", (pid,))
+
+
 def get_setting(conn, key, default=None):
     row = conn.execute("SELECT value FROM settings WHERE key=?", (key,)).fetchone()
     return row["value"] if row else default

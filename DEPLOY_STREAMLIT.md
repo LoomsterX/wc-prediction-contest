@@ -48,9 +48,12 @@ Still in **Advanced settings → Secrets**, paste (TOML format):
 ```toml
 DATABASE_URL = "postgresql://postgres.<project-ref>:<DB-PASSWORD>@aws-0-<region>.pooler.supabase.com:5432/postgres"
 ADMIN_PASSWORD = "choose-something-strong"
+SIGNUP_KEY = "the-invite-code-you-share-with-colleagues"   # optional
 ```
 
-The app automatically uses Supabase when `DATABASE_URL` is present, and falls
+`SIGNUP_KEY` is the invite code people must enter to create an account, so only
+those you share it with can join. Omit it to allow open sign-up. The app
+automatically uses Supabase when `DATABASE_URL` is present, and falls
 back to local SQLite when it isn't. You can edit secrets later under the app's
 **⋮ → Settings → Secrets** (the app reboots on save).
 
