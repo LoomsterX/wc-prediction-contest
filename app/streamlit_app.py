@@ -181,6 +181,10 @@ st.markdown(
       .st-key-nav_full{ display:none; }
       .st-key-nav_burger{ display:block; }
   }
+  /* account control pinned to the right of the nav row */
+  .st-key-acct{ display:flex; justify-content:flex-end; }
+  .brand{ font-family:var(--tech); font-weight:700; color:#cdd6f4;
+          padding:8px 2px; font-size:16px; letter-spacing:.03em; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -230,71 +234,82 @@ def team_options():
 
 
 # --------------------------------------------------------------------------- #
-# Sidebar: identity + login + navigation
+# Account controls (rendered at the right end of the top nav row)
 # --------------------------------------------------------------------------- #
-with st.sidebar:
-    st.markdown("### ⚽ WC 2026 Contest")
-
-    if logged_in():
-        r = my_row()
-        st.markdown(
-            f'<div class="id-card">{jersey_img(r["shirt_primary"], r["shirt_secondary"], r["shirt_pattern"], 72)}'
-            f'<div style="font-weight:700;margin-top:6px;">{r["name"]}</div>'
-            f'<div style="font-size:12px;opacity:.7;">{r["favorite_team"] or "no favorite team yet"}</div></div>',
-            unsafe_allow_html=True,
-        )
-        if st.button("Log out", use_container_width=True):
-            ss().pid = None
-            ss().pname = None
+def _login_form():
+    names = [r["name"] for r in conn.execute(
+        "SELECT name FROM participants ORDER BY name")]
+    if not names:
+        st.caption("No players yet — switch to **Sign up**.")
+        return
+    ln = st.selectbox("Name", names, key="login_name")
+    lp = st.text_input("PIN", type="password", key="login_pin")
+    if st.button("Log in", use_container_width=True, type="primary"):
+        row = dbmod.verify_login(conn, ln, lp)
+        if row:
+            ss().pid = row["participant_id"]
+            ss().pname = row["name"]
             st.rerun()
-    else:
-        tab_login, tab_new = st.tabs(["Log in", "Create"])
-        names = [
-            r["name"]
-            for r in conn.execute("SELECT name FROM participants ORDER BY name")
-        ]
-        with tab_login:
-            if names:
-                ln = st.selectbox("Name", names, key="login_name")
-                lp = st.text_input("PIN", type="password", key="login_pin")
-                if st.button("Log in", use_container_width=True):
-                    row = dbmod.verify_login(conn, ln, lp)
-                    if row:
-                        ss().pid = row["participant_id"]
-                        ss().pname = row["name"]
-                        st.rerun()
-                    else:
-                        st.error("Wrong name or PIN.")
-            else:
-                st.caption("No players yet — create an account.")
-        with tab_new:
-            nn = st.text_input("Display name", key="new_name")
-            np1 = st.text_input("Choose a PIN", type="password", key="new_pin")
-            np2 = st.text_input("Confirm PIN", type="password", key="new_pin2")
-            invite = ""
-            if SIGNUP_KEY:
-                invite = st.text_input("Invite code", type="password",
-                                       key="new_invite",
-                                       help="Ask the organiser for the code.")
-            if st.button("Create account", use_container_width=True):
-                if not nn.strip() or not np1:
-                    st.warning("Name and PIN required.")
-                elif np1 != np2:
-                    st.warning("PINs don't match.")
-                elif SIGNUP_KEY and invite.strip() != SIGNUP_KEY:
-                    st.error("Wrong invite code — ask the organiser.")
+        else:
+            st.error("Wrong name or PIN.")
+
+
+def _signup_form():
+    nn = st.text_input("Display name", key="new_name")
+    np1 = st.text_input("Choose a PIN", type="password", key="new_pin")
+    np2 = st.text_input("Confirm PIN", type="password", key="new_pin2")
+    invite = ""
+    if SIGNUP_KEY:
+        invite = st.text_input("Invite code", type="password", key="new_invite",
+                               help="Ask the organiser for the code.")
+    if st.button("Sign up", use_container_width=True, type="primary"):
+        if not nn.strip() or not np1:
+            st.warning("Name and PIN required.")
+        elif np1 != np2:
+            st.warning("PINs don't match.")
+        elif SIGNUP_KEY and invite.strip() != SIGNUP_KEY:
+            st.error("Wrong invite code — ask the organiser.")
+        else:
+            try:
+                pid = dbmod.create_participant(conn, nn.strip(), np1)
+                ss().pid = pid
+                ss().pname = nn.strip()
+                st.rerun()
+            except Exception:
+                st.warning("That name is already taken.")
+
+
+def render_account():
+    with st.container(key="acct"):
+        if logged_in():
+            r = my_row()
+            with st.popover(f"👤 {ss().pname}"):
+                st.markdown(
+                    f'<div style="text-align:center">'
+                    f'{jersey_img(r["shirt_primary"], r["shirt_secondary"], r["shirt_pattern"], 84)}'
+                    f'<div style="font-weight:700;margin-top:6px;">{r["name"]}</div>'
+                    f'<div style="font-size:12px;opacity:.7;">{r["favorite_team"] or "no favorite team yet"}</div></div>',
+                    unsafe_allow_html=True,
+                )
+                if st.button("Log out", use_container_width=True):
+                    ss().pid = None
+                    ss().pname = None
+                    ss().nav_page = "🏠 Home"
+                    ss().is_admin = False
+                    st.rerun()
+        else:
+            with st.popover("🔐 Log in"):
+                mode = st.radio("mode", ["Log in", "Sign up"], horizontal=True,
+                                key="auth_mode", label_visibility="collapsed")
+                if mode == "Log in":
+                    _login_form()
                 else:
-                    try:
-                        pid = dbmod.create_participant(conn, nn.strip(), np1)
-                        ss().pid = pid
-                        ss().pname = nn.strip()
-                        st.rerun()
-                    except Exception:
-                        st.warning("That name is already taken.")
+                    _signup_form()
 
 
 def need_login():
-    st.info("Log in (or create an account) in the sidebar to make or edit predictions.")
+    st.info("Use the **🔐 Log in** button at the top right to log in or sign up "
+            "and join the contest.")
 
 
 def lock_banner():
@@ -384,12 +399,22 @@ def _nav_buttons(prefix):
 
 def render_top_nav():
     st.markdown('<div class="nav-bar"></div>', unsafe_allow_html=True)
-    with st.container(key="nav_full"):
-        _nav_buttons("nav")
-    with st.container(key="nav_burger"):
-        with st.popover("☰ Menu", use_container_width=True):
-            _nav_buttons("burger")
-    return ss().nav_page
+    left, right = st.columns([6, 1.4], vertical_alignment="center")
+    with left:
+        if logged_in():
+            with st.container(key="nav_full"):
+                _nav_buttons("nav")
+            with st.container(key="nav_burger"):
+                with st.popover("☰ Menu", use_container_width=True):
+                    _nav_buttons("burger")
+        else:
+            st.markdown(
+                '<div class="brand">⚽ World Cup 2026 — Prediction Contest</div>',
+                unsafe_allow_html=True)
+    with right:
+        render_account()
+    # Logged-out visitors only ever see the front page.
+    return ss().nav_page if logged_in() else "🏠 Home"
 
 
 page = render_top_nav()
