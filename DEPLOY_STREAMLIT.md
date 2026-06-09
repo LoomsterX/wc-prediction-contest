@@ -96,6 +96,25 @@ The tables need to exist in Supabase. Either:
 - **Reset for a new tournament:** edit the seed CSVs / `seed_data.py`, then run
   `main.py seed` against the Supabase URL (wipes and rebuilds).
 
+## Troubleshooting
+
+**`ModuleNotFoundError: No module named 'sqlalchemy'` (or psycopg2) on deploy.**
+The repo has both a `uv.lock` and a `requirements.txt`; Streamlit Cloud prefers
+`uv.lock`. If you changed dependencies in `pyproject.toml` but didn't refresh the
+lockfile, the deploy installs stale packages. Fix:
+
+```bash
+uv lock                       # regenerate uv.lock from pyproject.toml
+git add uv.lock
+git commit -m "Update lockfile"
+git push
+```
+
+Then **Reboot app** on Streamlit Cloud. Rule of thumb: any time you edit
+dependencies, run `uv lock` and commit `uv.lock` in the same push. Keep
+`uv.lock` in the repo (don't delete it) — `pyproject.toml` alone can be
+misdetected as a Poetry project and fail differently.
+
 ## When you outgrow it → Azure
 
 To make it private (only Crayon staff) or more robust later, containerise the

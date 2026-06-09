@@ -94,9 +94,9 @@ Community Cloud. CSV export remains your backup.
 
 1. `uv run python main.py seed` to build a clean database.
 2. Optionally edit the seed CSVs in `data/` (see below) and re-run seed.
-3. **Change two things before sharing:** the admin password near the top of
-   `app/streamlit_app.py` (`ADMIN_PASSWORD`), and confirm the matchday 2 & 3
-   dates in `data/fixtures.csv` against the official FIFA schedule.
+3. **Before sharing:** set the `ADMIN_PASSWORD` secret (it is no longer
+   hard-coded — see below), and confirm the matchday 2 & 3 dates in
+   `data/fixtures.csv` against the official FIFA schedule.
 4. Share the app link. Colleagues open it, create an account (name + PIN),
    design their jersey on **My profile**, and fill in their match, outcome and
    wildcard predictions. Editing stays open until you lock it.
@@ -126,7 +126,7 @@ Everything is data-driven and easy to change:
 | Teams / groups | `data/teams.csv` (then re-seed) |
 | Fixtures, kickoff times | `data/fixtures.csv` (then re-seed) |
 | Wildcard questions | `data/wildcards.csv` (then re-seed) |
-| Admin password | `ADMIN_PASSWORD` in `app/streamlit_app.py` |
+| Admin password | `ADMIN_PASSWORD` secret (Streamlit secrets / env var) |
 
 > Re-seeding (`main.py seed`) rebuilds the database **from scratch** and
 > discards any predictions, so finalise your CSV edits *before* launch. Mid

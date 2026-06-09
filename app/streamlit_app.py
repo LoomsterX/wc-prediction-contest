@@ -35,8 +35,10 @@ from wc_contest import config, db as dbmod, scoring, export, avatar  # noqa: E40
 from wc_contest.engine import upsert  # noqa: E402
 from wc_contest.config import OUTCOME_POINTS  # noqa: E402
 
-ADMIN_PASSWORD = "worldcup2026"  # CHANGE THIS before sharing the app
-try:                              # ...or set it in Streamlit secrets
+# Admin password comes ONLY from Streamlit secrets or the ADMIN_PASSWORD env var
+# — never hard-coded. If unset, the Admin page stays locked.
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD")
+try:
     ADMIN_PASSWORD = st.secrets.get("ADMIN_PASSWORD", ADMIN_PASSWORD)
 except Exception:
     pass
@@ -924,10 +926,14 @@ elif page == "📊 Leaderboard":
 # =========================================================================== #
 elif page == "🔐 Admin":
     st.header("🔐 Admin")
+    if not ADMIN_PASSWORD:
+        st.error("Admin is not configured. Set an **ADMIN_PASSWORD** secret "
+                 "(Streamlit Cloud → app ⋮ → Settings → Secrets) and reboot.")
+        st.stop()
     if not ss().is_admin:
         pw = st.text_input("Admin password", type="password")
         if st.button("Unlock admin"):
-            if pw == ADMIN_PASSWORD:
+            if pw and pw == ADMIN_PASSWORD:
                 ss().is_admin = True
                 st.rerun()
             else:

@@ -12,3 +12,6 @@ wheels/
 # Contest database (regenerated from seed CSVs; holds live predictions locally)
 data/*.db
 data/*.db-journal
+
+# Local secrets — never commit (DATABASE_URL, ADMIN_PASSWORD)
+.streamlit/secrets.toml
