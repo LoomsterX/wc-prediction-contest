@@ -67,16 +67,27 @@ KNOCKOUT_STAGES = [
     ("Final", 1, "2026-07-19"),
 ]
 
+# Goal-total bins for the "total goals" wildcard (W01): "<100", then 10-wide
+# bands 100-109 ... 290-299, then "300+".
+TOTAL_GOALS_BINS = (
+    ["<100"]
+    + [f"{s}-{s + 9}" for s in range(100, 300, 10)]
+    + ["300+"]
+)
+
 # Predefined wildcard questions. Columns mirror data/wildcards.csv.
-# type: number | boolean | choice | team
+# type: number | boolean | choice | team | bin | text
+#   bin  -> player picks a band from `options`; admin enters the actual NUMBER
+#           as the result and full points are awarded if it falls in the band.
+#   text -> free-text answer (e.g. a player's name); case-insensitive match.
 WILDCARDS = [
     {
         "wildcard_id": "W01",
         "question": "Total goals scored in the entire tournament",
-        "type": "number",
-        "options": "",
+        "type": "bin",
+        "options": "|".join(TOTAL_GOALS_BINS),
         "points": 6,
-        "hint": "104 matches. Closest gets the most (banded).",
+        "hint": "104 matches. Pick the band you think the final total lands in.",
     },
     {
         "wildcard_id": "W02",
@@ -96,11 +107,12 @@ WILDCARDS = [
     },
     {
         "wildcard_id": "W04",
-        "question": "Will any host nation (USA, Mexico, Canada) reach the semi-finals?",
-        "type": "boolean",
-        "options": "Yes|No",
+        "question": "Which host nation (USA, Mexico, Canada) will go furthest in the competition?",
+        "type": "choice",
+        "options": "United States|Mexico|Canada",
         "points": 4,
-        "hint": "",
+        "hint": ("If two host nations exit at the same stage, the one knocked "
+                 "out by the higher-ranked team counts as having gone furthest."),
     },
     {
         "wildcard_id": "W05",
@@ -133,5 +145,45 @@ WILDCARDS = [
         "options": "",
         "points": 4,
         "hint": "Straight reds and second-yellow reds both count.",
+    },
+    {
+        "wildcard_id": "W09",
+        "question": "Golden Boot winner (top scorer)",
+        "type": "text",
+        "options": "",
+        "points": 8,
+        "hint": "Name the player you think finishes as the tournament's top scorer.",
+    },
+    {
+        "wildcard_id": "W10",
+        "question": "Total corner kicks in the entire tournament",
+        "type": "number",
+        "options": "",
+        "points": 4,
+        "hint": "All 104 matches combined. Closest gets the most (banded).",
+    },
+    {
+        "wildcard_id": "W11",
+        "question": "Total goals scored by defenders in the tournament",
+        "type": "number",
+        "options": "",
+        "points": 5,
+        "hint": "Only goals scored by players listed as defenders count (banded).",
+    },
+    {
+        "wildcard_id": "W12",
+        "question": "Total goals scored by goalkeepers in the tournament",
+        "type": "number",
+        "options": "",
+        "points": 6,
+        "hint": "Rare! Penalties and open play both count (banded).",
+    },
+    {
+        "wildcard_id": "W13",
+        "question": "Highest ball-possession % by a team in a single match",
+        "type": "number",
+        "options": "",
+        "points": 4,
+        "hint": "The biggest possession share any team records in one match (banded).",
     },
 ]

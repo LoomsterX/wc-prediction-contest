@@ -5,13 +5,14 @@ An office prediction competition for the 2026 FIFA World Cup (48 teams,
 through a small web app; an organiser enters results as matches finish; and the
 standings show up on a live HTML dashboard and/or in Power BI.
 
-It covers all three prediction types:
+It covers two prediction types:
 
-- **Match-by-match** — predict the scoreline of every match.
-- **Tournament outcomes** — champion, finalists, semi/quarter-finalists,
-  group winners and the Golden Boot.
-- **Wildcards** — fun side bets (total goals, penalty-shootout final, dark
-  horse, …).
+- **Match-by-match** — predict the scoreline of every match. Lock in each
+  group (its filter turns green), then the knockout rounds unlock; once all
+  knockout rounds are locked you press **Submit predictions** to freeze them.
+- **Wildcards** — fun side bets (banded total goals, penalty-shootout final,
+  which host nation goes furthest, Golden Boot winner, dark horse, plus stat
+  bets on corners, defender/goalkeeper goals and possession).
 
 Full scoring is in **[docs/RULES.md](docs/RULES.md)**.
 
@@ -24,10 +25,15 @@ Full scoring is in **[docs/RULES.md](docs/RULES.md)**.
   football kit (two colours + pattern: solid / stripes / halves / sash). Your
   jersey appears in the sidebar and on the leaderboard podium.
 - **Navigation:** a sidebar switches between Home, My profile, Match picks,
-  Outcomes, Wildcards, Leaderboard and Admin. On Match picks, group A–L are
-  buttons you click to navigate, with a "🔒 Lock in" submit at the bottom.
-- **Editing stays open** until the organiser flips the **prediction lock** in
-  the Admin page (one toggle freezes all editing for everyone).
+  Wildcards, Predictions, Matches & results, Leaderboard and Admin. On Match
+  picks, group A–L are buttons you click to navigate; each group's button
+  turns **green** once you lock it in.
+- **Submit flow:** lock in all 12 groups to unlock the knockout rounds; lock
+  every knockout round to reveal the **Submit predictions** button, which
+  freezes all of that player's picks. An admin can unlock an individual player
+  again from the Admin → Manage users panel.
+- **Editing stays open** until either the player submits, or the organiser
+  flips the global **prediction lock** in the Admin page.
 - **Animated podium:** the leaderboard shows a big top-3 podium with crowns,
   jerseys, sparkles and confetti — both in the app and the HTML dashboard.
 
@@ -98,8 +104,8 @@ Community Cloud. CSV export remains your backup.
    hard-coded — see below), and confirm the matchday 2 & 3 dates in
    `data/fixtures.csv` against the official FIFA schedule.
 4. Share the app link. Colleagues open it, create an account (name + PIN),
-   design their jersey on **My profile**, and fill in their match, outcome and
-   wildcard predictions. Editing stays open until you lock it.
+   design their jersey on **My profile**, and fill in their match and wildcard
+   predictions. Editing stays open until they submit (or you lock it).
 5. **At the deadline**, open **Admin** and flip the **🔒 Predictions locked**
    toggle on — this freezes everyone's picks. (Flip it off again only if you
    want to reopen editing.)
@@ -107,8 +113,9 @@ Community Cloud. CSV export remains your backup.
 **During the tournament**
 
 1. Open the app's **Admin** page (password protected), enter the actual scores
-   for finished matches, and — as rounds resolve — the outcome and wildcard
-   results.
+   for finished matches, and — as rounds resolve — the wildcard results. (For
+   the banded "total goals" wildcard, enter the actual goal *number*; it's
+   matched to the band automatically.)
 2. Click **Refresh dashboards**. This recomputes every score and rewrites
    `exports/*.csv` and `dashboard/data.json`.
 3. The HTML dashboard updates on reload; in Power BI click **Refresh**.

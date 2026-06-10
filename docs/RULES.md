@@ -4,17 +4,15 @@ A friendly office prediction competition for the 2026 FIFA World Cup
 (11 June – 19 July 2026, hosted by the USA, Canada and Mexico — 48 teams,
 12 groups, 104 matches).
 
-There are **three ways to score points**: match-by-match predictions,
-one-off tournament-outcome predictions, and wildcards. Your total is the sum
-of all three.
+There are **two ways to score points**: match-by-match predictions and
+wildcards. Your total is the sum of both.
 
 ---
 
 ## 1. Match-by-match predictions
 
-Predict the **scoreline** of every match. You can edit a pick any time up to
-that match's kickoff; it locks when the match starts. You score the best
-single tier you reach:
+Predict the **scoreline** of every match. You score the best single tier you
+reach:
 
 | You got… | Example (you / actual) | Points |
 |---|---|---|
@@ -27,35 +25,23 @@ For knockout matches, predict the 90-minute scoreline as usual. If you also
 correctly name the team that advances (e.g. you predicted a draw but picked
 the right side to go through on penalties), you get a **+1 bonus**.
 
-There are 72 group-stage matches plus 32 knockout matches. Group fixtures are
-known now; knockout fixtures open for prediction as each round's teams are
-confirmed.
+There are 72 group-stage matches plus 32 knockout matches.
 
-## 2. Tournament-outcome predictions (the "bracket")
+### Locking in and submitting
 
-Submitted once, locked at the opening match (11 June 2026). Predict who goes
-how far:
+- Fill in a group's six scorelines and press **🔒 Lock in Group X picks** —
+  that group's filter button turns **green**.
+- The **Knockout** tab unlocks only once all **12 groups** are locked in.
+- Lock in every knockout round to reveal the **✅ Submit predictions** button.
+  Submitting **freezes all of your picks** (groups and knockout).
+- Need to change something after submitting? Ask the organiser — they can
+  unlock you from **Admin → Manage users**.
 
-| Prediction | Points (each) |
-|---|---|
-| Champion | 25 |
-| Runner-up | 15 |
-| Third place | 8 |
-| Each correct finalist (2 teams) | 10 |
-| Each correct semi-finalist (4 teams) | 6 |
-| Each correct quarter-finalist (8 teams) | 3 |
-| Each correct group winner (12 groups) | 3 |
-| Golden Boot (tournament top scorer) | 10 |
+## 2. Wildcards
 
-Finalists, semi-finalists and quarter-finalists are scored on membership:
-if a team you named reaches that stage, you score — the exact slot doesn't
-matter. Group winners must match the specific group.
-
-## 3. Wildcards
-
-A handful of fun, one-off side bets, locked at the opening match. Points are
-fixed per question (shown in the app). For the numeric "closest guess"
-wildcards, points are awarded in bands by how close you are:
+A handful of fun, one-off side bets. Points are fixed per question (shown in
+the app). For the numeric "closest guess" wildcards, points are awarded in
+bands by how close you are:
 
 | Absolute error | Share of the question's points |
 |---|---|
@@ -65,17 +51,25 @@ wildcards, points are awarded in bands by how close you are:
 | Within 15 | 25% |
 | Further off | 0% |
 
-The default wildcards:
+The wildcards:
 
-1. **Total goals** in the whole tournament (number) — 6 pts
+1. **Total goals** in the whole tournament — pick a **band** (`<100`,
+   `100–109`, … `300+`). Full points if the actual total lands in your band — 6 pts
 2. **Penalty shootout in the Final?** (yes/no) — 4 pts
 3. **Golden Boot winner's goal count** (number) — 5 pts
-4. **Will a host nation reach the semis?** (yes/no) — 4 pts
+4. **Which host nation (USA, Mexico, Canada) goes furthest?** (choice) — 4 pts.
+   If two host nations exit at the same stage, the one knocked out by the
+   higher-ranked team counts as having gone furthest.
 5. **Champion's confederation** (UEFA / CONMEBOL / …) — 5 pts
 6. **Most goals by one team in a single match** (number) — 4 pts
 7. **Dark horse**: a team outside the world top 10 that reaches the QF
    (team) — 8 pts
 8. **Total red cards in the group stage** (number) — 4 pts
+9. **Golden Boot winner** — name the top scorer (text) — 8 pts
+10. **Total corner kicks** in the tournament (number) — 4 pts
+11. **Goals scored by defenders** (number) — 5 pts
+12. **Goals scored by goalkeepers** (number) — 6 pts
+13. **Highest single-match possession %** (number) — 4 pts
 
 You can change any of these in `data/wildcards.csv` before launch.
 
@@ -83,16 +77,17 @@ You can change any of these in `data/wildcards.csv` before launch.
 
 ## Deadlines
 
-- **Tournament outcomes & wildcards:** lock at the opening match, **11 June 2026**.
-- **Match predictions:** each match locks individually at its own kickoff,
-  so you can keep predicting later rounds throughout the tournament.
+- **Wildcards:** lock at the opening match, **11 June 2026** (or when you press
+  **Submit predictions**).
+- **Match predictions:** locked when you submit, or when the organiser flips
+  the global prediction lock.
 
 ## Tie-breakers
 
 If two players finish level on total points, they are separated by, in order:
 
 1. Most **exact scoreline** hits.
-2. Most points from the **tournament-outcome** bracket.
+2. Most points from **wildcards**.
 3. Earliest first submission.
 
 ## Running the contest
@@ -102,5 +97,5 @@ finish, then clicks **Refresh dashboards**. The leaderboard and both
 dashboards update automatically. Only results that have been entered count,
 so scores build up naturally as the tournament goes on.
 
-*All point values live in `src/wc_contest/config.py` — change them there and
-nothing else needs editing.*
+*Match-scoring values live in `src/wc_contest/config.py`; wildcard questions
+and their points live in `data/wildcards.csv` (and `seed_data.py`).*

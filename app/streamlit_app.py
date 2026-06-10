@@ -33,7 +33,6 @@ except Exception:
 
 from wc_contest import config, db as dbmod, scoring, export, avatar  # noqa: E402
 from wc_contest.engine import upsert  # noqa: E402
-from wc_contest.config import OUTCOME_POINTS  # noqa: E402
 
 # Admin password comes ONLY from Streamlit secrets or the ADMIN_PASSWORD env var
 # — never hard-coded. If unset, the Admin page stays locked.
@@ -67,6 +66,9 @@ def get_conn():
     if conn.execute("SELECT COUNT(*) FROM teams").fetchone()[0] == 0:
         dbmod.generate_seed_csvs()
         dbmod.load_seed(conn)
+    # Keep the wildcard set in step with the seed (updates questions / adds new
+    # ones on databases that were seeded before these changes).
+    dbmod.sync_wildcards(conn)
     return conn
 
 
@@ -213,7 +215,14 @@ def logged_in() -> bool:
 
 
 def editing_open() -> bool:
+    """Global editing window (open until the organiser locks everyone)."""
     return not dbmod.predictions_locked(conn)
+
+
+def player_locked(pid) -> bool:
+    """A player can't edit if the organiser locked everyone OR the player has
+    submitted their predictions (final lock)."""
+    return dbmod.predictions_locked(conn) or dbmod.final_submitted(conn, pid)
 
 
 def jersey_img(primary, secondary, pattern, size=64, cls="jersey-badge"):
@@ -382,7 +391,7 @@ def match_label(m):
 # --------------------------------------------------------------------------- #
 # Top header navigation (boxes + hover/active; hamburger on small screens)
 # --------------------------------------------------------------------------- #
-PAGES = ["🏠 Home", "👤 My profile", "🎯 Match picks", "🏆 Outcomes",
+PAGES = ["🏠 Home", "👤 My profile", "🎯 Match picks",
          "🃏 Wildcards", "🗳️ Predictions", "📅 Matches & results",
          "📊 Leaderboard", "🔐 Admin"]
 ss().setdefault("nav_page", PAGES[0])
@@ -440,18 +449,16 @@ if page == "🏠 Home":
         nmatch = conn.execute(
             "SELECT COUNT(*) FROM match_predictions WHERE participant_id=?", (ss().pid,)
         ).fetchone()[0]
-        nout = conn.execute(
-            "SELECT COUNT(*) FROM outcome_predictions WHERE participant_id=?",
-            (ss().pid,),
-        ).fetchone()[0]
         nwild = conn.execute(
             "SELECT COUNT(*) FROM wildcard_predictions WHERE participant_id=?",
             (ss().pid,),
         ).fetchone()[0]
-        c1, c2, c3 = st.columns(3)
+        nwild_total = conn.execute("SELECT COUNT(*) FROM wildcards").fetchone()[0]
+        c1, c2 = st.columns(2)
         c1.metric("Your match picks", f"{nmatch} / 104")
-        c2.metric("Outcome picks", nout)
-        c3.metric("Wildcard picks", f"{nwild} / 8")
+        c2.metric("Wildcard picks", f"{nwild} / {nwild_total}")
+        if dbmod.final_submitted(conn, ss().pid):
+            st.success("✅ Your predictions are submitted and locked in.")
         st.caption(
             "Use the sidebar to navigate. Start with **My profile** to design your jersey!"
         )
@@ -535,19 +542,50 @@ elif page == "🎯 Match picks":
         need_login()
     else:
         pid = ss().pid
-        can_edit = editing_open()
+        scopes = dbmod.locked_scopes(conn, pid)
+        submitted_final = dbmod.final_submitted(conn, pid, scopes)
+        can_edit = not player_locked(pid)
+
+        if submitted_final:
+            st.markdown(
+                '<div class="lock-banner lock-on">✅ Your predictions are SUBMITTED '
+                'and locked. Ask an admin to unlock if you need to make changes.</div>',
+                unsafe_allow_html=True,
+            )
+
+        ko_stages = [
+            r["stage"]
+            for r in conn.execute(
+                "SELECT DISTINCT stage FROM matches WHERE is_knockout=1 ORDER BY match_id"
+            )
+        ]
+        groups_done = dbmod.all_groups_locked(conn, pid, scopes)
+        ko_done = dbmod.ko_stages_locked(conn, pid, ko_stages, scopes)
+
         view = st.radio("Stage", ["Group stage", "Knockout"], horizontal=True)
 
         if view == "Group stage":
-            groups = [chr(c) for c in range(ord("A"), ord("L") + 1)]
-            st.write("**Pick a group:**")
+            groups = dbmod.GROUP_CODES
+            # Paint locked-in groups green via their button container key.
+            locked_groups = [g for g in groups if f"group:{g}" in scopes]
+            if locked_groups:
+                css = "".join(
+                    f'.st-key-gbtn_{g} button{{background:#0f7b3f !important;'
+                    f'border-color:#28e07a !important;color:#eafff2 !important;'
+                    f'box-shadow:0 0 12px rgba(40,224,122,.5) !important;}}'
+                    for g in locked_groups
+                )
+                st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
+            st.write("**Pick a group:**  🟢 = locked in")
             rows = [groups[:6], groups[6:]]
             for rowg in rows:
                 cols = st.columns(6)
                 for i, g in enumerate(rowg):
+                    is_locked = f"group:{g}" in scopes
                     btn_type = "primary" if ss().sel_group == g else "secondary"
+                    label = f"Group {g}" + (" ✓" if is_locked else "")
                     if cols[i].button(
-                        f"Group {g}",
+                        label,
                         key=f"gbtn_{g}",
                         type=btn_type,
                         use_container_width=True,
@@ -555,7 +593,7 @@ elif page == "🎯 Match picks":
                         ss().sel_group = g
                         st.rerun()
             g = ss().sel_group
-            st.subheader(f"Group {g}")
+            st.subheader(f"Group {g}" + ("  🟢 locked in" if f"group:{g}" in scopes else ""))
             matches = conn.execute(
                 "SELECT * FROM matches WHERE group_code=? ORDER BY matchday, match_id",
                 (g,),
@@ -602,141 +640,96 @@ elif page == "🎯 Match picks":
                             "pred_home": int(hv), "pred_away": int(av),
                             "pred_advance": None, "submitted_at": dbmod.now_iso(),
                         }, ["participant_id", "match_id"])
+                    dbmod.lock_scope(conn, pid, f"group:{g}")
                     conn.commit()
                     st.success(f"Group {g} picks locked in! ⚽")
+                    st.rerun()
         else:
-            ko_stages = [
-                r["stage"]
-                for r in conn.execute(
-                    "SELECT DISTINCT stage FROM matches WHERE is_knockout=1 ORDER BY match_id"
+            if not groups_done:
+                missing = [g for g in dbmod.GROUP_CODES if f"group:{g}" not in scopes]
+                st.info(
+                    "🔒 Knockout predictions unlock once you've locked in **all 12 "
+                    "group stages**. Still to lock in: "
+                    + ", ".join(f"Group {g}" for g in missing)
                 )
-            ]
-            stage = st.selectbox("Round", ko_stages)
-            matches = conn.execute(
-                "SELECT * FROM matches WHERE stage=? ORDER BY match_id", (stage,)
-            ).fetchall()
-            existing = {
-                x["match_id"]: x
-                for x in conn.execute(
-                    "SELECT * FROM match_predictions WHERE participant_id=?", (pid,)
+            else:
+                # show lock status per knockout round
+                done_stages = [s for s in ko_stages if f"ko:{s}" in scopes]
+                st.caption(
+                    "🟢 Locked rounds: "
+                    + (", ".join(done_stages) if done_stages else "none yet")
                 )
-            }
-            with st.form(f"kf_{stage}"):
-                picks = []
-                for m in matches:
-                    ex = existing.get(m["match_id"])
-                    c1, c2, c3, c4 = st.columns([3, 1, 1, 3])
-                    c1.markdown(f"{m['home_label']}")
-                    hv = c2.number_input(
-                        "H",
-                        0,
-                        30,
-                        value=ex["pred_home"] if ex else 0,
-                        key=f"h_{m['match_id']}",
-                        disabled=not can_edit,
-                        label_visibility="collapsed",
-                    )
-                    av = c3.number_input(
-                        "A",
-                        0,
-                        30,
-                        value=ex["pred_away"] if ex else 0,
-                        key=f"a_{m['match_id']}",
-                        disabled=not can_edit,
-                        label_visibility="collapsed",
-                    )
-                    c4.markdown(f"{m['away_label']}")
-                    picks.append((m["match_id"], hv, av))
-                if st.form_submit_button(
-                    f"🔒 Lock in {stage} picks", type="primary", disabled=not can_edit
-                ):
-                    for mid, hv, av in picks:
-                        upsert(conn, "match_predictions", {
-                            "participant_id": pid, "match_id": mid,
-                            "pred_home": int(hv), "pred_away": int(av),
-                            "pred_advance": None, "submitted_at": dbmod.now_iso(),
-                        }, ["participant_id", "match_id"])
-                    conn.commit()
-                    st.success(f"{stage} picks locked in!")
-
-# =========================================================================== #
-# OUTCOMES
-# =========================================================================== #
-elif page == "🏆 Outcomes":
-    st.header("🏆 Tournament outcome predictions")
-    lock_banner()
-    if not logged_in():
-        need_login()
-    elif not editing_open():
-        st.warning("Predictions are locked — you can't edit outcomes now.")
-    else:
-        pid = ss().pid
-        teams = team_options()
-        ex = {
-            (r["category"], r["ref"]): r["value"]
-            for r in conn.execute(
-                "SELECT * FROM outcome_predictions WHERE participant_id=?", (pid,)
-            )
-        }
-
-        def pick(label, cat, ref="", opts=None):
-            opts = opts if opts is not None else ([""] + teams)
-            cur = ex.get((cat, ref), "")
-            idx = opts.index(cur) if cur in opts else 0
-            return st.selectbox(label, opts, index=idx, key=f"{cat}_{ref}")
-
-        with st.form("outcomes"):
-            st.markdown(
-                f"**Podium** — champion {OUTCOME_POINTS['champion']}, "
-                f"runner-up {OUTCOME_POINTS['runner_up']}, "
-                f"3rd {OUTCOME_POINTS['third_place']} pts"
-            )
-            champ = pick("🥇 Champion", "champion")
-            runner = pick("🥈 Runner-up", "runner_up")
-            third = pick("🥉 Third place", "third_place")
-            st.markdown(f"**Finalists** ({OUTCOME_POINTS['finalist']} pts each)")
-            f1 = pick("Finalist 1", "finalist", "1")
-            f2 = pick("Finalist 2", "finalist", "2")
-            st.markdown(f"**Semi-finalists** ({OUTCOME_POINTS['semi_finalist']} each)")
-            sf = [
-                pick(f"Semi-finalist {i}", "semi_finalist", str(i)) for i in range(1, 5)
-            ]
-            st.markdown(f"**Golden Boot** ({OUTCOME_POINTS['golden_boot']} pts)")
-            gb = st.text_input(
-                "Top scorer (player name)", value=ex.get(("golden_boot", ""), "")
-            )
-            st.markdown(f"**Group winners** ({OUTCOME_POINTS['group_winner']} each)")
-            gw, cols = {}, st.columns(4)
-            for i, gc in enumerate([chr(c) for c in range(ord("A"), ord("L") + 1)]):
-                gteams = [
-                    x["name"]
+                stage = st.selectbox(
+                    "Round",
+                    ko_stages,
+                    format_func=lambda s: f"{s}  ✓" if f"ko:{s}" in scopes else s,
+                )
+                matches = conn.execute(
+                    "SELECT * FROM matches WHERE stage=? ORDER BY match_id", (stage,)
+                ).fetchall()
+                existing = {
+                    x["match_id"]: x
                     for x in conn.execute(
-                        "SELECT name FROM teams WHERE group_code=? ORDER BY name", (gc,)
+                        "SELECT * FROM match_predictions WHERE participant_id=?", (pid,)
                     )
-                ]
-                cur = ex.get(("group_winner", gc), "")
-                idx = ([""] + gteams).index(cur) if cur in gteams else 0
-                gw[gc] = cols[i % 4].selectbox(
-                    f"Group {gc}", [""] + gteams, index=idx, key=f"gw_{gc}"
-                )
-            if st.form_submit_button("🔒 Lock in outcome picks", type="primary"):
-                rows = [
-                    ("champion", "", champ),
-                    ("runner_up", "", runner),
-                    ("third_place", "", third),
-                    ("finalist", "1", f1),
-                    ("finalist", "2", f2),
-                    ("golden_boot", "", gb),
-                ]
-                rows += [("semi_finalist", str(i + 1), t) for i, t in enumerate(sf)]
-                rows += [("group_winner", g, t) for g, t in gw.items()]
-                for cat, ref, val in rows:
-                    if str(val).strip():
-                        upsert(conn, "outcome_predictions", {
-                            "participant_id": pid, "category": cat, "ref": ref,
-                            "value": str(val).strip(), "submitted_at": dbmod.now_iso(),
-                        }, ["participant_id", "category", "ref"])
-                st.success("Outcome picks locked in! 🏆")
+                }
+                with st.form(f"kf_{stage}"):
+                    picks = []
+                    for m in matches:
+                        ex = existing.get(m["match_id"])
+                        c1, c2, c3, c4 = st.columns([3, 1, 1, 3])
+                        c1.markdown(f"{m['home_label']}")
+                        hv = c2.number_input(
+                            "H",
+                            0,
+                            30,
+                            value=ex["pred_home"] if ex else 0,
+                            key=f"h_{m['match_id']}",
+                            disabled=not can_edit,
+                            label_visibility="collapsed",
+                        )
+                        av = c3.number_input(
+                            "A",
+                            0,
+                            30,
+                            value=ex["pred_away"] if ex else 0,
+                            key=f"a_{m['match_id']}",
+                            disabled=not can_edit,
+                            label_visibility="collapsed",
+                        )
+                        c4.markdown(f"{m['away_label']}")
+                        picks.append((m["match_id"], hv, av))
+                    if st.form_submit_button(
+                        f"🔒 Lock in {stage} picks", type="primary", disabled=not can_edit
+                    ):
+                        for mid, hv, av in picks:
+                            upsert(conn, "match_predictions", {
+                                "participant_id": pid, "match_id": mid,
+                                "pred_home": int(hv), "pred_away": int(av),
+                                "pred_advance": None, "submitted_at": dbmod.now_iso(),
+                            }, ["participant_id", "match_id"])
+                        dbmod.lock_scope(conn, pid, f"ko:{stage}")
+                        conn.commit()
+                        st.success(f"{stage} picks locked in!")
+                        st.rerun()
+
+                # final submit: only once every knockout round is locked in
+                st.divider()
+                if ko_done and not submitted_final and can_edit:
+                    st.markdown("**All groups and knockout rounds are locked in.**")
+                    st.caption("Submitting freezes ALL your picks. An admin can "
+                               "unlock you afterwards if you need changes.")
+                    if st.button("✅ Submit predictions (final)", type="primary"):
+                        dbmod.lock_scope(conn, pid, "final")
+                        conn.commit()
+                        ss().balloons_done = False
+                        st.success("Predictions submitted and locked! 🎉")
+                        st.rerun()
+                elif not ko_done and not submitted_final:
+                    left = [s for s in ko_stages if f"ko:{s}" not in scopes]
+                    st.caption("Lock in every knockout round to enable the final "
+                               "**Submit predictions** button. Remaining: "
+                               + ", ".join(left))
 
 # =========================================================================== #
 # WILDCARDS
@@ -746,8 +739,12 @@ elif page == "🃏 Wildcards":
     lock_banner()
     if not logged_in():
         need_login()
-    elif not editing_open():
-        st.warning("Predictions are locked — you can't edit wildcards now.")
+    elif player_locked(ss().pid):
+        if dbmod.final_submitted(conn, ss().pid):
+            st.warning("Your predictions are submitted and locked — ask an admin "
+                       "to unlock if you need to edit wildcards.")
+        else:
+            st.warning("Predictions are locked — you can't edit wildcards now.")
     else:
         pid = ss().pid
         teams = team_options()
@@ -769,7 +766,7 @@ elif page == "🃏 Wildcards":
                         step=1.0,
                         key=w["wildcard_id"],
                     )
-                elif w["type"] in ("boolean", "choice"):
+                elif w["type"] in ("boolean", "choice", "bin"):
                     opts = [""] + w["options"].split("|")
                     idx = opts.index(cur) if cur in opts else 0
                     answers[w["wildcard_id"]] = st.selectbox(
@@ -780,6 +777,10 @@ elif page == "🃏 Wildcards":
                     idx = opts.index(cur) if cur in opts else 0
                     answers[w["wildcard_id"]] = st.selectbox(
                         label, opts, index=idx, key=w["wildcard_id"]
+                    )
+                elif w["type"] == "text":
+                    answers[w["wildcard_id"]] = st.text_input(
+                        label, value=cur or "", key=w["wildcard_id"]
                     )
                 if w["hint"]:
                     st.caption(w["hint"])
@@ -807,14 +808,10 @@ elif page == "🗳️ Predictions":
                     "predictions — no peeking before then. 🙈")
         modes = ["My predictions"] + (["Compare everyone"] if locked else [])
         mode = st.radio("View", modes, horizontal=True)
-        cat = st.radio("Category", ["Match picks", "Outcomes", "Wildcards"],
+        cat = st.radio("Category", ["Match picks", "Wildcards"],
                        horizontal=True)
         players = [(r["participant_id"], r["name"]) for r in conn.execute(
             "SELECT participant_id, name FROM participants ORDER BY name")]
-
-        OUTCOME_ORDER = [("🥇 Champion", "champion", ""), ("🥈 Runner-up", "runner_up", ""),
-                         ("🥉 Third", "third_place", ""), ("Finalist 1", "finalist", "1"),
-                         ("Finalist 2", "finalist", "2"), ("Golden Boot", "golden_boot", "")]
 
         def render_one(pid, name):
             if cat == "Match picks":
@@ -828,14 +825,6 @@ elif page == "🗳️ Predictions":
                     p = pr.get(m["match_id"])
                     rows.append({"Match": match_label(m),
                                  "Pick": f"{p['pred_home']}–{p['pred_away']}" if p else "—"})
-                st.dataframe(rows, hide_index=True, use_container_width=True)
-            elif cat == "Outcomes":
-                ex = {(r["category"], r["ref"]): r["value"] for r in conn.execute(
-                    "SELECT * FROM outcome_predictions WHERE participant_id=?", (pid,))}
-                rows = [{"Prediction": lbl, "Pick": ex.get((c, rf), "—")}
-                        for lbl, c, rf in OUTCOME_ORDER]
-                for gc in GROUPS_AL:
-                    rows.append({"Prediction": f"Winner {gc}", "Pick": ex.get(("group_winner", gc), "—")})
                 st.dataframe(rows, hide_index=True, use_container_width=True)
             else:
                 ex = {r["wildcard_id"]: r["value"] for r in conn.execute(
@@ -864,17 +853,6 @@ elif page == "🗳️ Predictions":
                         row[cols[m["match_id"]]] = f"{p['pred_home']}–{p['pred_away']}" if p else "—"
                     rows.append(row)
                 st.dataframe(rows, hide_index=True, use_container_width=True)
-            elif cat == "Outcomes":
-                allo = {}
-                for r in conn.execute("SELECT * FROM outcome_predictions"):
-                    allo[(r["participant_id"], r["category"], r["ref"])] = r["value"]
-                rows = []
-                for pid, name in players:
-                    row = {"Player": name}
-                    for lbl, c, rf in OUTCOME_ORDER:
-                        row[lbl] = allo.get((pid, c, rf), "—")
-                    rows.append(row)
-                st.dataframe(rows, hide_index=True, use_container_width=True)
             else:
                 wq = [(w["wildcard_id"], w["question"]) for w in conn.execute(
                     "SELECT * FROM wildcards ORDER BY wildcard_id")]
@@ -887,7 +865,7 @@ elif page == "🗳️ Predictions":
                     for wid, q in wq:
                         row[wid] = allw.get((pid, wid), "—")
                     rows.append(row)
-                st.caption("Columns are wildcard IDs (W01–W08) — see the Wildcards page for the questions.")
+                st.caption("Columns are wildcard IDs — see the Wildcards page for the questions.")
                 st.dataframe(rows, hide_index=True, use_container_width=True)
 
 # =========================================================================== #
@@ -999,7 +977,6 @@ elif page == "📊 Leaderboard":
                     "Player": r["name"],
                     "Total": r["total_points"],
                     "Match": r["match_points"],
-                    "Outcomes": r["outcome_points"],
                     "Wildcards": r["wildcard_points"],
                     "Exact scores": r["exact_score_hits"],
                 }
@@ -1080,49 +1057,10 @@ elif page == "🔐 Admin":
             st.success(f"Saved {len(entries)} result(s).")
 
     st.divider()
-    with st.expander("Tournament outcome results"):
-        teams = team_options()
-        with st.form("outres"):
-            ch = st.selectbox("Champion", [""] + teams)
-            ru = st.selectbox("Runner-up", [""] + teams)
-            tp = st.selectbox("Third place", [""] + teams)
-            sf = st.multiselect("Semi-finalists (4)", teams, max_selections=4)
-            qf = st.multiselect("Quarter-finalists (8)", teams, max_selections=8)
-            gb = st.text_input("Golden Boot (player)")
-            st.markdown("**Group winners**")
-            gwres, gcols = {}, st.columns(4)
-            for i, gc in enumerate([chr(c) for c in range(ord("A"), ord("L") + 1)]):
-                gteams = [
-                    r["name"]
-                    for r in conn.execute(
-                        "SELECT name FROM teams WHERE group_code=? ORDER BY name", (gc,)
-                    )
-                ]
-                gwres[gc] = gcols[i % 4].selectbox(
-                    f"Group {gc}", [""] + gteams, key=f"gwres_{gc}"
-                )
-            if st.form_submit_button("Save outcome results"):
-                conn.execute("DELETE FROM outcome_results")
-                pairs = [
-                    ("champion", "", ch),
-                    ("runner_up", "", ru),
-                    ("third_place", "", tp),
-                    ("golden_boot", "", gb),
-                ]
-                pairs += [
-                    ("finalist", str(i), t) for i, t in enumerate([ch, ru], 1) if t
-                ]
-                pairs += [("semi_finalist", str(i), t) for i, t in enumerate(sf, 1)]
-                pairs += [("quarter_finalist", str(i), t) for i, t in enumerate(qf, 1)]
-                pairs += [("group_winner", g, t) for g, t in gwres.items() if t]
-                for cat, ref, val in pairs:
-                    if str(val).strip():
-                        upsert(conn, "outcome_results", {
-                            "category": cat, "ref": ref, "value": str(val).strip(),
-                        }, ["category", "ref"])
-                st.success("Outcome results saved.")
-
     with st.expander("Wildcard results"):
+        st.caption("For the banded 'total goals' question (W01), enter the actual "
+                   "**number** of goals — it's matched to the band automatically. "
+                   "For others, enter the exact answer (team / player / Yes-No / band).")
         with st.form("wres"):
             vals = {}
             for w in conn.execute("SELECT * FROM wildcards ORDER BY wildcard_id"):
@@ -1181,6 +1119,20 @@ elif page == "🔐 Admin":
                     except Exception:
                         st.error("Could not save — is that display name already taken?")
 
+        st.markdown("**Prediction submission**")
+        u_scopes = dbmod.locked_scopes(conn, upid)
+        if dbmod.final_submitted(conn, upid, u_scopes):
+            st.caption(f"🔒 {who} has **submitted** their predictions (frozen).")
+            if st.button("🔓 Unlock predictions (allow edits)",
+                         use_container_width=True, key="mu_unlock"):
+                dbmod.unlock_scope(conn, upid, "final")
+                st.success(f"{who} can edit their predictions again.")
+                st.rerun()
+        else:
+            n_glocked = sum(1 for g in dbmod.GROUP_CODES if f"group:{g}" in u_scopes)
+            st.caption(f"✏️ {who} has not submitted yet "
+                       f"({n_glocked}/12 groups locked in).")
+
         st.markdown("**Reset actions**")
         rc1, rc2 = st.columns(2)
         with rc1:
@@ -1231,8 +1183,8 @@ elif page == "🔐 Admin":
     if st.button("Prepare backup ZIP"):
         zbuf = io.BytesIO()
         tables = ["participants", "teams", "matches", "wildcards",
-                  "match_predictions", "outcome_predictions", "wildcard_predictions",
-                  "match_results", "outcome_results", "wildcard_results", "settings"]
+                  "match_predictions", "wildcard_predictions",
+                  "match_results", "wildcard_results", "settings", "pred_locks"]
         with zipfile.ZipFile(zbuf, "w", zipfile.ZIP_DEFLATED) as zf:
             for t in tables:
                 rows, cols = _table(t)

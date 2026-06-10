@@ -128,6 +128,18 @@ wildcard_results = sa.Table(
     sa.Column("value", sa.Text, nullable=False),
 )
 
+# Per-participant prediction locks. `scope` is one of:
+#   "group:A" ... "group:L"  -> a group's picks have been locked in (green tile)
+#   "ko:<stage>"             -> a knockout round's picks have been locked in
+#   "final"                  -> the player has submitted; everything is frozen
+# An admin removes the "final" row to let a player edit again.
+pred_locks = sa.Table(
+    "pred_locks", metadata,
+    sa.Column("participant_id", sa.Integer, primary_key=True),
+    sa.Column("scope", sa.Text, primary_key=True),
+    sa.Column("locked_at", sa.Text, nullable=False),
+)
+
 
 # --------------------------------------------------------------------------- #
 # Row / Result wrappers (preserve row["col"] AND row[0] access)

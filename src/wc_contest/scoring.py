@@ -62,6 +62,20 @@ def score_numeric_wildcard(predicted: float, actual: float, points: float) -> fl
     return 0.0
 
 
+def bin_contains(label: str, value: float) -> bool:
+    """Whether `value` falls inside a bin label like '<100', '100-109', '300+'."""
+    label = str(label).strip()
+    try:
+        if label.startswith("<"):
+            return value < float(label[1:])
+        if label.endswith("+"):
+            return value >= float(label[:-1])
+        lo, hi = label.split("-")
+        return float(lo) <= value <= float(hi)
+    except (ValueError, AttributeError):
+        return False
+
+
 # --------------------------------------------------------------------------- #
 # Result containers
 # --------------------------------------------------------------------------- #
@@ -91,7 +105,6 @@ def compute_scores(conn: sqlite3.Connection) -> list[ParticipantScore]:
             participant_id=row["participant_id"], name=row["name"])
 
     _score_matches(conn, scores)
-    _score_outcomes(conn, scores)
     _score_wildcards(conn, scores)
     _track_submission_times(conn, scores)
 
@@ -100,7 +113,7 @@ def compute_scores(conn: sqlite3.Connection) -> list[ParticipantScore]:
         key=lambda s: (
             -s.total,
             -s.exact_score_hits,
-            -s.outcome_points,
+            -s.wildcard_points,
             s.submitted_at,
         ),
     )
@@ -129,38 +142,6 @@ def _score_matches(conn, scores) -> None:
             s.exact_score_hits += 1
 
 
-def _score_outcomes(conn, scores) -> None:
-    actuals = {(r["category"], r["ref"]): r["value"]
-               for r in conn.execute("SELECT * FROM outcome_results")}
-    if not actuals:
-        return
-    # For multi-team categories (finalist, semi_finalist, quarter_finalist,
-    # group_winner) a prediction is correct if the team appears anywhere in the
-    # actual set for that category, regardless of ref/slot.
-    actual_by_cat: dict[str, set[str]] = {}
-    for (cat, _ref), val in actuals.items():
-        actual_by_cat.setdefault(cat, set()).add(val)
-
-    ordered_cats = {"champion", "runner_up", "third_place", "golden_boot"}
-    for p in conn.execute("SELECT * FROM outcome_predictions"):
-        s = scores.get(p["participant_id"])
-        if s is None:
-            continue
-        cat, ref, val = p["category"], p["ref"], p["value"]
-        pts = config.OUTCOME_POINTS.get(cat, 0)
-        if cat in ordered_cats:
-            if actuals.get((cat, ref)) == val or val in actual_by_cat.get(cat, set()):
-                s.outcome_points += pts
-        elif cat == "group_winner":
-            # ref is the group code -> must match that specific group's winner
-            if actuals.get((cat, ref)) == val:
-                s.outcome_points += pts
-        else:
-            # set membership categories (finalist/semi/quarter)
-            if val in actual_by_cat.get(cat, set()):
-                s.outcome_points += pts
-
-
 def _score_wildcards(conn, scores) -> None:
     actuals = {r["wildcard_id"]: r["value"]
                for r in conn.execute("SELECT * FROM wildcard_results")}
@@ -179,6 +160,13 @@ def _score_wildcards(conn, scores) -> None:
             try:
                 s.wildcard_points += score_numeric_wildcard(
                     float(p["value"]), float(actual), meta["points"])
+            except ValueError:
+                pass
+        elif meta["type"] == "bin":
+            # actual is the recorded number; full points if it lands in the band
+            try:
+                if bin_contains(p["value"], float(actual)):
+                    s.wildcard_points += meta["points"]
             except ValueError:
                 pass
         else:

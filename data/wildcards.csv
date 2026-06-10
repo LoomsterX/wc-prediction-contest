@@ -1,9 +1,14 @@
 wildcard_id,question,type,options,points,hint
-W01,Total goals scored in the entire tournament,number,,6,104 matches. Closest gets the most (banded).
+W01,Total goals scored in the entire tournament,bin,<100|100-109|110-119|120-129|130-139|140-149|150-159|160-169|170-179|180-189|190-199|200-209|210-219|220-229|230-239|240-249|250-259|260-269|270-279|280-289|290-299|300+,6,104 matches. Pick the band you think the final total lands in.
 W02,Will the Final be decided by a penalty shootout?,boolean,Yes|No,4,
 W03,Golden Boot winner's number of goals,number,,5,Top scorer's final goal tally.
-W04,"Will any host nation (USA, Mexico, Canada) reach the semi-finals?",boolean,Yes|No,4,
+W04,"Which host nation (USA, Mexico, Canada) will go furthest in the competition?",choice,United States|Mexico|Canada,4,"If two host nations exit at the same stage, the one knocked out by the higher-ranked team counts as having gone furthest."
 W05,Which confederation will the champion come from?,choice,UEFA|CONMEBOL|CONCACAF|CAF|AFC|OFC,5,
 W06,Most goals scored by a single team in one match,number,,4,The biggest single-team goal haul of the tournament.
 W07,Dark horse: name a team NOT in the world top 10 that reaches the quarter-finals,team,,8,"High risk, high reward. 0 points if they don't make the QF."
 W08,Total number of red cards shown in the group stage,number,,4,Straight reds and second-yellow reds both count.
+W09,Golden Boot winner (top scorer),text,,8,Name the player you think finishes as the tournament's top scorer.
+W10,Total corner kicks in the entire tournament,number,,4,All 104 matches combined. Closest gets the most (banded).
+W11,Total goals scored by defenders in the tournament,number,,5,Only goals scored by players listed as defenders count (banded).
+W12,Total goals scored by goalkeepers in the tournament,number,,6,Rare! Penalties and open play both count (banded).
+W13,Highest ball-possession % by a team in a single match,number,,4,The biggest possession share any team records in one match (banded).

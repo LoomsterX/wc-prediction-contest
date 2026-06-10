@@ -136,6 +136,62 @@ def set_predictions_locked(conn, locked: bool) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Wildcard sync: keep the live `wildcards` table in step with seed_data so that
+# question text / type / options / new questions update on existing databases
+# (not just freshly-seeded ones).
+# --------------------------------------------------------------------------- #
+def sync_wildcards(conn: Database) -> None:
+    for r in seed_data.WILDCARDS:
+        upsert(conn, "wildcards", {
+            "wildcard_id": r["wildcard_id"], "question": r["question"],
+            "type": r["type"], "options": r["options"],
+            "points": float(r["points"]), "hint": r.get("hint", ""),
+        }, ["wildcard_id"])
+
+
+# --------------------------------------------------------------------------- #
+# Per-participant prediction locks (group lock-in / knockout / final submit)
+# --------------------------------------------------------------------------- #
+GROUP_CODES = [chr(c) for c in range(ord("A"), ord("L") + 1)]
+
+
+def lock_scope(conn, pid, scope) -> None:
+    upsert(conn, "pred_locks",
+           {"participant_id": pid, "scope": scope, "locked_at": now_iso()},
+           ["participant_id", "scope"])
+
+
+def unlock_scope(conn, pid, scope) -> None:
+    conn.execute("DELETE FROM pred_locks WHERE participant_id=? AND scope=?",
+                 (pid, scope))
+
+
+def locked_scopes(conn, pid) -> set[str]:
+    return {r["scope"] for r in conn.execute(
+        "SELECT scope FROM pred_locks WHERE participant_id=?", (pid,))}
+
+
+def group_locked(conn, pid, gcode, scopes: set[str] | None = None) -> bool:
+    scopes = locked_scopes(conn, pid) if scopes is None else scopes
+    return f"group:{gcode}" in scopes
+
+
+def all_groups_locked(conn, pid, scopes: set[str] | None = None) -> bool:
+    scopes = locked_scopes(conn, pid) if scopes is None else scopes
+    return all(f"group:{g}" in scopes for g in GROUP_CODES)
+
+
+def ko_stages_locked(conn, pid, stages, scopes: set[str] | None = None) -> bool:
+    scopes = locked_scopes(conn, pid) if scopes is None else scopes
+    return bool(stages) and all(f"ko:{s}" in scopes for s in stages)
+
+
+def final_submitted(conn, pid, scopes: set[str] | None = None) -> bool:
+    scopes = locked_scopes(conn, pid) if scopes is None else scopes
+    return "final" in scopes
+
+
+# --------------------------------------------------------------------------- #
 # Generate seed CSVs from seed_data (these are the editable source of truth)
 # --------------------------------------------------------------------------- #
 def generate_seed_csvs() -> None:
