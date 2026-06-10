@@ -31,7 +31,7 @@ try:
 except Exception:
     pass
 
-from wc_contest import config, db as dbmod, scoring, export, avatar  # noqa: E402
+from wc_contest import config, db as dbmod, scoring, export, avatar, knockout  # noqa: E402
 from wc_contest.engine import upsert  # noqa: E402
 
 # Admin password comes ONLY from Streamlit secrets or the ADMIN_PASSWORD env var
@@ -384,6 +384,50 @@ def group_standings(gcode):
     return sorted(tbl.values(), key=lambda x: (-x["Pts"], -x["GD"], -x["GF"], x["team"]))
 
 
+def standings_from_scorelines(gcode, scorelines):
+    """Build a group table from arbitrary scorelines.
+
+    `scorelines` is an iterable of (home_team_id, away_team_id, home_goals,
+    away_goals). Used to show a player's *predicted* standings (live from the
+    score inputs, or from their saved picks)."""
+    names = {r["team_id"]: r["name"] for r in conn.execute("SELECT team_id, name FROM teams")}
+    teams = [r["name"] for r in conn.execute(
+        "SELECT name FROM teams WHERE group_code=? ORDER BY name", (gcode,))]
+    tbl = {t: dict(team=t, P=0, W=0, D=0, L=0, GF=0, GA=0, GD=0, Pts=0) for t in teams}
+    for hid, aid, hg, ag in scorelines:
+        home, away = names.get(hid), names.get(aid)
+        if home not in tbl or away not in tbl:
+            continue
+        hg, ag = int(hg), int(ag)
+        for t, gf, ga in ((home, hg, ag), (away, ag, hg)):
+            tbl[t]["P"] += 1
+            tbl[t]["GF"] += gf
+            tbl[t]["GA"] += ga
+            tbl[t]["GD"] = tbl[t]["GF"] - tbl[t]["GA"]
+        if hg > ag:
+            tbl[home]["W"] += 1; tbl[home]["Pts"] += 3; tbl[away]["L"] += 1
+        elif hg < ag:
+            tbl[away]["W"] += 1; tbl[away]["Pts"] += 3; tbl[home]["L"] += 1
+        else:
+            tbl[home]["D"] += 1; tbl[away]["D"] += 1
+            tbl[home]["Pts"] += 1; tbl[away]["Pts"] += 1
+    return sorted(tbl.values(), key=lambda x: (-x["Pts"], -x["GD"], -x["GF"], x["team"]))
+
+
+def render_standings_table(standings):
+    """Render a standings list as a dataframe with the top-2 (qualifiers)
+    flagged. Expects rows from group_standings / standings_from_scorelines."""
+    rows = []
+    for i, s in enumerate(standings):
+        rows.append({
+            "": "🟢" if i < 2 else "",
+            "Team": s["team"], "P": s["P"], "W": s["W"], "D": s["D"],
+            "L": s["L"], "GF": s["GF"], "GA": s["GA"], "GD": s["GD"],
+            "Pts": s["Pts"],
+        })
+    st.dataframe(rows, hide_index=True, use_container_width=True)
+
+
 def match_label(m):
     return f"{m['home_label']} vs {m['away_label']}"
 
@@ -556,14 +600,47 @@ elif page == "🎯 Match picks":
         ko_stages = [
             r["stage"]
             for r in conn.execute(
-                "SELECT DISTINCT stage FROM matches WHERE is_knockout=1 ORDER BY match_id"
+                "SELECT stage FROM matches WHERE is_knockout=1 "
+                "GROUP BY stage ORDER BY MIN(kickoff_utc), MIN(match_id)"
             )
         ]
         groups_done = dbmod.all_groups_locked(conn, pid, scopes)
         ko_done = dbmod.ko_stages_locked(conn, pid, ko_stages, scopes)
 
+        # all of this player's match predictions (used by both views)
+        existing = {
+            x["match_id"]: x
+            for x in conn.execute(
+                "SELECT * FROM match_predictions WHERE participant_id=?", (pid,)
+            )
+        }
+
+        # layout + bracket styling
+        st.markdown(
+            """
+<style>
+  /* group view: stack the filter/picks split on small screens only */
+  @media (max-width: 760px){
+    .st-key-mp_split > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]{
+        flex-direction:column !important; }
+    .st-key-mp_split > div[data-testid="stVerticalBlock"] > div[data-testid="stHorizontalBlock"]
+        > div[data-testid="stColumn"]{ width:100% !important; flex:1 1 100% !important; }
+  }
+  .ko-col-title{ font-family:var(--tech); font-size:12px; letter-spacing:.08em;
+      color:var(--neon2); text-align:center; padding-bottom:3px; margin-bottom:8px;
+      border-bottom:1px solid rgba(41,240,255,.3); }
+  .ko-team{ font-size:11px; opacity:.85; margin:1px 0; white-space:nowrap;
+      overflow:hidden; text-overflow:ellipsis; }
+  .ko-gap{ height:16px; }
+  .ko-pad-1{ height:64px; } .ko-pad-2{ height:150px; } .ko-pad-3{ height:215px; }
+</style>
+""",
+            unsafe_allow_html=True,
+        )
+
         view = st.radio("Stage", ["Group stage", "Knockout"], horizontal=True)
 
+        # ------------------------------------------------------------------- #
         if view == "Group stage":
             groups = dbmod.GROUP_CODES
             # Paint locked-in groups green via their button container key.
@@ -576,147 +653,179 @@ elif page == "🎯 Match picks":
                     for g in locked_groups
                 )
                 st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
-            st.write("**Pick a group:**  🟢 = locked in")
-            rows = [groups[:6], groups[6:]]
-            for rowg in rows:
-                cols = st.columns(6)
-                for i, g in enumerate(rowg):
-                    is_locked = f"group:{g}" in scopes
-                    btn_type = "primary" if ss().sel_group == g else "secondary"
-                    label = f"Group {g}" + (" ✓" if is_locked else "")
-                    if cols[i].button(
-                        label,
-                        key=f"gbtn_{g}",
-                        type=btn_type,
-                        use_container_width=True,
+
+            with st.container(key="mp_split"):
+                left, right = st.columns([1, 2], gap="large")
+                with left:
+                    st.markdown("**Pick a group**  ·  🟢 = locked in")
+                    gcols = st.columns(2)
+                    for i, g in enumerate(groups):
+                        is_locked = f"group:{g}" in scopes
+                        btn_type = "primary" if ss().sel_group == g else "secondary"
+                        if gcols[i % 2].button(
+                            f"Group {g}" + (" ✓" if is_locked else ""),
+                            key=f"gbtn_{g}", type=btn_type, use_container_width=True,
+                        ):
+                            ss().sel_group = g
+                            st.rerun()
+                with right:
+                    g = ss().sel_group
+                    st.subheader(
+                        f"Group {g}"
+                        + ("  🟢 locked in" if f"group:{g}" in scopes else "")
+                    )
+                    gmatches = conn.execute(
+                        "SELECT * FROM matches WHERE group_code=? "
+                        "ORDER BY matchday, match_id", (g,),
+                    ).fetchall()
+                    # Live inputs (no form) so the predicted standings below update
+                    # as soon as a scoreline changes.
+                    picks = []
+                    for m in gmatches:
+                        ex = existing.get(m["match_id"])
+                        c1, c2, c3, c4 = st.columns([3, 1, 1, 3])
+                        c1.markdown(f"**{m['home_label']}**")
+                        hv = c2.number_input(
+                            "H", 0, 30, value=ex["pred_home"] if ex else 0,
+                            key=f"h_{m['match_id']}", disabled=not can_edit,
+                            label_visibility="collapsed",
+                        )
+                        av = c3.number_input(
+                            "A", 0, 30, value=ex["pred_away"] if ex else 0,
+                            key=f"a_{m['match_id']}", disabled=not can_edit,
+                            label_visibility="collapsed",
+                        )
+                        c4.markdown(f"**{m['away_label']}**")
+                        picks.append((m, int(hv), int(av)))
+
+                    if st.button(
+                        f"🔒 Lock in Group {g} picks", type="primary",
+                        disabled=not can_edit, key=f"lockbtn_{g}",
                     ):
-                        ss().sel_group = g
+                        for m, hv, av in picks:
+                            upsert(conn, "match_predictions", {
+                                "participant_id": pid, "match_id": m["match_id"],
+                                "pred_home": hv, "pred_away": av,
+                                "pred_advance": None,
+                                "submitted_at": dbmod.now_iso(),
+                            }, ["participant_id", "match_id"])
+                        dbmod.lock_scope(conn, pid, f"group:{g}")
+                        conn.commit()
+                        st.success(f"Group {g} picks locked in! ⚽")
                         st.rerun()
-            g = ss().sel_group
-            st.subheader(f"Group {g}" + ("  🟢 locked in" if f"group:{g}" in scopes else ""))
-            matches = conn.execute(
-                "SELECT * FROM matches WHERE group_code=? ORDER BY matchday, match_id",
-                (g,),
-            ).fetchall()
-            existing = {
-                x["match_id"]: x
-                for x in conn.execute(
-                    "SELECT * FROM match_predictions WHERE participant_id=?", (pid,)
-                )
-            }
-            with st.form(f"mf_{g}"):
-                picks = []
-                for m in matches:
-                    ex = existing.get(m["match_id"])
-                    c1, c2, c3, c4 = st.columns([3, 1, 1, 3])
-                    c1.markdown(f"**{m['home_label']}**")
-                    hv = c2.number_input(
-                        "H",
-                        0,
-                        30,
-                        value=ex["pred_home"] if ex else 0,
-                        key=f"h_{m['match_id']}",
-                        disabled=not can_edit,
-                        label_visibility="collapsed",
+
+                    # Predicted standings — recomputed live from the inputs above.
+                    st.markdown("**📊 Your predicted standings**")
+                    render_standings_table(standings_from_scorelines(
+                        g, [(m["home_team_id"], m["away_team_id"], hv, av)
+                            for m, hv, av in picks]))
+                    st.caption(
+                        "🟢 = top 2 advance. Updates as you edit · "
+                        + ("locked in." if f"group:{g}" in scopes
+                           else "press **Lock in** to save.")
                     )
-                    av = c3.number_input(
-                        "A",
-                        0,
-                        30,
-                        value=ex["pred_away"] if ex else 0,
-                        key=f"a_{m['match_id']}",
-                        disabled=not can_edit,
-                        label_visibility="collapsed",
-                    )
-                    c4.markdown(f"**{m['away_label']}**")
-                    picks.append((m["match_id"], hv, av))
-                submitted = st.form_submit_button(
-                    f"🔒 Lock in Group {g} picks", type="primary", disabled=not can_edit
-                )
-                if submitted:
-                    for mid, hv, av in picks:
-                        upsert(conn, "match_predictions", {
-                            "participant_id": pid, "match_id": mid,
-                            "pred_home": int(hv), "pred_away": int(av),
-                            "pred_advance": None, "submitted_at": dbmod.now_iso(),
-                        }, ["participant_id", "match_id"])
-                    dbmod.lock_scope(conn, pid, f"group:{g}")
-                    conn.commit()
-                    st.success(f"Group {g} picks locked in! ⚽")
-                    st.rerun()
-        else:
+
+        # ------------------------------------------------------------------- #
+        else:  # Knockout — functional entry; centered bracket layout is TBD
             if not groups_done:
                 missing = [g for g in dbmod.GROUP_CODES if f"group:{g}" not in scopes]
                 st.info(
                     "🔒 Knockout predictions unlock once you've locked in **all 12 "
-                    "group stages**. Still to lock in: "
+                    "groups**. Still to lock in: "
                     + ", ".join(f"Group {g}" for g in missing)
                 )
             else:
-                # show lock status per knockout round
-                done_stages = [s for s in ko_stages if f"ko:{s}" in scopes]
                 st.caption(
-                    "🟢 Locked rounds: "
-                    + (", ".join(done_stages) if done_stages else "none yet")
+                    ("🟢 Knockout picks are locked in."
+                     if ko_done else
+                     "Match-ups are derived from your group predictions. Enter your "
+                     "scorelines, then **Save knockout picks** — saving also feeds the "
+                     "next round (R32 winners → R16, and so on).")
                 )
-                stage = st.selectbox(
-                    "Round",
-                    ko_stages,
-                    format_func=lambda s: f"{s}  ✓" if f"ko:{s}" in scopes else s,
-                )
-                matches = conn.execute(
-                    "SELECT * FROM matches WHERE stage=? ORDER BY match_id", (stage,)
-                ).fetchall()
-                existing = {
-                    x["match_id"]: x
-                    for x in conn.execute(
-                        "SELECT * FROM match_predictions WHERE participant_id=?", (pid,)
-                    )
-                }
-                with st.form(f"kf_{stage}"):
-                    picks = []
-                    for m in matches:
-                        ex = existing.get(m["match_id"])
-                        c1, c2, c3, c4 = st.columns([3, 1, 1, 3])
-                        c1.markdown(f"{m['home_label']}")
-                        hv = c2.number_input(
-                            "H",
-                            0,
-                            30,
-                            value=ex["pred_home"] if ex else 0,
-                            key=f"h_{m['match_id']}",
-                            disabled=not can_edit,
-                            label_visibility="collapsed",
-                        )
-                        av = c3.number_input(
-                            "A",
-                            0,
-                            30,
-                            value=ex["pred_away"] if ex else 0,
-                            key=f"a_{m['match_id']}",
-                            disabled=not can_edit,
-                            label_visibility="collapsed",
-                        )
-                        c4.markdown(f"{m['away_label']}")
-                        picks.append((m["match_id"], hv, av))
+
+                # Derived bracket for this player (from their group + KO picks).
+                bracket = knockout.resolve_bracket(conn, pid)
+
+                by_stage: dict[str, list] = {}
+                for m in conn.execute("SELECT * FROM matches WHERE is_knockout=1"):
+                    by_stage.setdefault(m["stage"], []).append(m)
+
+                def _num(m):
+                    try:
+                        return int(str(m["match_id"]).rsplit("_", 1)[-1])
+                    except ValueError:
+                        return 0
+                for s in by_stage:
+                    by_stage[s].sort(key=_num)
+
+                picks: list = []
+
+                def ko_slot(m):
+                    mid = m["match_id"]
+                    slot = bracket.get(mid, {})
+                    home_id, away_id = slot.get("home_id"), slot.get("away_id")
+                    hl = slot.get("home_label", m["home_label"])
+                    al = slot.get("away_label", m["away_label"])
+                    ex = existing.get(mid)
+                    st.markdown(f"<div class='ko-team'>{hl}</div>",
+                                unsafe_allow_html=True)
+                    hv = st.number_input(
+                        "H", 0, 30, value=ex["pred_home"] if ex else 0,
+                        key=f"h_{mid}", disabled=not can_edit,
+                        label_visibility="collapsed")
+                    st.markdown(f"<div class='ko-team'>{al}</div>",
+                                unsafe_allow_html=True)
+                    av = st.number_input(
+                        "A", 0, 30, value=ex["pred_away"] if ex else 0,
+                        key=f"a_{mid}", disabled=not can_edit,
+                        label_visibility="collapsed")
+                    # who-advances picker (used only if the scoreline is level)
+                    adv = None
+                    if home_id is not None and away_id is not None:
+                        opts = [home_id, away_id]
+                        cur = ex["pred_advance"] if ex else None
+                        idx = opts.index(cur) if cur in opts else 0
+                        adv = st.radio(
+                            "Advances if level", opts, index=idx,
+                            format_func=lambda t: bracket[mid][
+                                "home_label" if t == home_id else "away_label"],
+                            key=f"adv_{mid}", disabled=not can_edit, horizontal=True)
+                    picks.append((mid, hv, av, adv))
+                    st.markdown("<div class='ko-gap'></div>", unsafe_allow_html=True)
+
+                with st.form("ko_all"):
+                    for stage in ko_stages:
+                        ms = by_stage.get(stage, [])
+                        if not ms:
+                            continue
+                        st.markdown(f"**{stage}**")
+                        ncol = 2 if len(ms) > 1 else 1
+                        cols = st.columns(ncol)
+                        for i, m in enumerate(ms):
+                            with cols[i % ncol]:
+                                ko_slot(m)
+                        st.divider()
                     if st.form_submit_button(
-                        f"🔒 Lock in {stage} picks", type="primary", disabled=not can_edit
+                        "💾 Save knockout picks", type="primary", disabled=not can_edit
                     ):
-                        for mid, hv, av in picks:
+                        for mid, hv, av, adv in picks:
                             upsert(conn, "match_predictions", {
                                 "participant_id": pid, "match_id": mid,
                                 "pred_home": int(hv), "pred_away": int(av),
-                                "pred_advance": None, "submitted_at": dbmod.now_iso(),
+                                "pred_advance": int(adv) if adv is not None else None,
+                                "submitted_at": dbmod.now_iso(),
                             }, ["participant_id", "match_id"])
-                        dbmod.lock_scope(conn, pid, f"ko:{stage}")
+                        for s in ko_stages:
+                            dbmod.lock_scope(conn, pid, f"ko:{s}")
                         conn.commit()
-                        st.success(f"{stage} picks locked in!")
+                        st.success("Knockout picks saved! Match-ups for the next "
+                                   "rounds now reflect your results. 🏆")
                         st.rerun()
 
-                # final submit: only once every knockout round is locked in
+                # final submit: once the knockout stage is locked in
                 st.divider()
                 if ko_done and not submitted_final and can_edit:
-                    st.markdown("**All groups and knockout rounds are locked in.**")
+                    st.markdown("**All groups and the knockout stage are locked in.**")
                     st.caption("Submitting freezes ALL your picks. An admin can "
                                "unlock you afterwards if you need changes.")
                     if st.button("✅ Submit predictions (final)", type="primary"):
@@ -726,10 +835,8 @@ elif page == "🎯 Match picks":
                         st.success("Predictions submitted and locked! 🎉")
                         st.rerun()
                 elif not ko_done and not submitted_final:
-                    left = [s for s in ko_stages if f"ko:{s}" not in scopes]
-                    st.caption("Lock in every knockout round to enable the final "
-                               "**Submit predictions** button. Remaining: "
-                               + ", ".join(left))
+                    st.caption("Save your knockout picks to enable the final "
+                               "**Submit predictions** button.")
 
 # =========================================================================== #
 # WILDCARDS
@@ -826,6 +933,13 @@ elif page == "🗳️ Predictions":
                     rows.append({"Match": match_label(m),
                                  "Pick": f"{p['pred_home']}–{p['pred_away']}" if p else "—"})
                 st.dataframe(rows, hide_index=True, use_container_width=True)
+                # predicted standings from this player's saved group picks
+                st.markdown(f"**📊 Predicted standings — Group {g}**")
+                scorelines = [(m["home_team_id"], m["away_team_id"],
+                               pr[m["match_id"]]["pred_home"], pr[m["match_id"]]["pred_away"])
+                              for m in ms if m["match_id"] in pr]
+                render_standings_table(standings_from_scorelines(g, scorelines))
+                st.caption("🟢 = top 2 advance, based on saved picks.")
             else:
                 ex = {r["wildcard_id"]: r["value"] for r in conn.execute(
                     "SELECT * FROM wildcard_predictions WHERE participant_id=?", (pid,))}

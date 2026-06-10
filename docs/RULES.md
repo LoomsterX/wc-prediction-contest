@@ -32,6 +32,13 @@ There are 72 group-stage matches plus 32 knockout matches.
 - Fill in a group's six scorelines and press **🔒 Lock in Group X picks** —
   that group's filter button turns **green**.
 - The **Knockout** tab unlocks only once all **12 groups** are locked in.
+- The knockout **bracket is derived from your group predictions**: the Round of
+  32 is seeded from your predicted group winners, runners-up and the eight best
+  third-placed teams (using the official 2026 FIFA bracket and Annex C
+  third-place allocation). Saving your knockout scorelines then feeds the next
+  round — R32 winners populate the Round of 16, and so on to the Final.
+- Because a knockout match can't end level, when you predict a draw you pick
+  **who advances** (penalties); that team carries through to the next round.
 - Lock in every knockout round to reveal the **✅ Submit predictions** button.
   Submitting **freezes all of your picks** (groups and knockout).
 - Need to change something after submitting? Ask the organiser — they can
