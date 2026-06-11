@@ -15,10 +15,21 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from datetime import datetime, timezone, timedelta
 
 import os
 
 import streamlit as st
+
+
+# Norwegian wall-clock time for kickoff display. Europe/Oslo if tzdata is
+# available, else a fixed +2 (CEST) which is correct for the whole tournament
+# window (Jun–Jul 2026).
+try:
+    from zoneinfo import ZoneInfo
+    OSLO_TZ = ZoneInfo("Europe/Oslo")
+except Exception:
+    OSLO_TZ = timezone(timedelta(hours=2))
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -214,15 +225,24 @@ def logged_in() -> bool:
     return ss().pid is not None
 
 
-def editing_open() -> bool:
-    """Global editing window (open until the organiser locks everyone)."""
-    return not dbmod.predictions_locked(conn)
+def group_editable(g, pid) -> bool:
+    """Can this player still edit Group g? Open unless the organiser locked that
+    group globally, or the player has submitted their final predictions."""
+    return not dbmod.group_pred_locked(conn, g) and not dbmod.final_submitted(conn, pid)
 
 
-def player_locked(pid) -> bool:
-    """A player can't edit if the organiser locked everyone OR the player has
-    submitted their predictions (final lock)."""
-    return dbmod.predictions_locked(conn) or dbmod.final_submitted(conn, pid)
+def knockout_editable(pid) -> bool:
+    return not dbmod.knockout_pred_locked(conn) and not dbmod.final_submitted(conn, pid)
+
+
+def wildcards_editable(pid) -> bool:
+    return not dbmod.wildcards_pred_locked(conn) and not dbmod.final_submitted(conn, pid)
+
+
+def reveal_others() -> bool:
+    """Everyone's picks become visible once any stage has been globally locked
+    (i.e. the tournament has started)."""
+    return dbmod.any_stage_locked(conn)
 
 
 def jersey_img(primary, secondary, pattern, size=64, cls="jersey-badge"):
@@ -322,16 +342,29 @@ def need_login():
 
 
 def lock_banner():
-    if dbmod.predictions_locked(conn):
+    g_locked = [g for g in dbmod.GROUP_CODES if dbmod.group_pred_locked(conn, g)]
+    ko = dbmod.knockout_pred_locked(conn)
+    wc = dbmod.wildcards_pred_locked(conn)
+    if not g_locked and not ko and not wc:
         st.markdown(
-            '<div class="lock-banner lock-on">🔒 Predictions are LOCKED by the organiser — viewing only.</div>',
+            '<div class="lock-banner lock-off">✏️ Predictions are OPEN — you can edit until the organiser locks each stage.</div>',
             unsafe_allow_html=True,
         )
-    else:
-        st.markdown(
-            '<div class="lock-banner lock-off">✏️ Predictions are OPEN — you can edit until the organiser locks them.</div>',
-            unsafe_allow_html=True,
-        )
+        return
+    bits = []
+    if len(g_locked) == len(dbmod.GROUP_CODES):
+        bits.append("all groups")
+    elif g_locked:
+        bits.append("groups " + ", ".join(g_locked))
+    if ko:
+        bits.append("knockout")
+    if wc:
+        bits.append("wildcards")
+    st.markdown(
+        f'<div class="lock-banner lock-on">🔒 Locked by the organiser: '
+        f'{"; ".join(bits)}. Other stages remain open.</div>',
+        unsafe_allow_html=True,
+    )
 
 
 GROUPS_AL = [chr(c) for c in range(ord("A"), ord("L") + 1)]
@@ -490,21 +523,88 @@ if page == "🏠 Home":
     st.write("")
     lock_banner()
     if logged_in():
+        pid = ss().pid
+
+        # ---- ranking summary: rank, points, deficit to leader ----
+        rows = scoring.leaderboard_rows(conn)
+        me = next((r for r in rows if r["participant_id"] == pid), None)
+        leader = rows[0] if rows else None
+        earned = me["total_points"] if me else 0
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Your rank", f"#{me['rank']} of {len(rows)}" if me else "—")
+        c2.metric("Your points", f"{earned:g}")
+        if me and leader and me["rank"] > 1:
+            c3.metric("Behind leader",
+                      f"{leader['total_points'] - earned:g} pts",
+                      delta=f"leader: {leader['name']}", delta_color="off")
+        elif me:
+            c3.metric("Behind leader", "🏆 You're leading!")
+
+        # ---- points progress bar: earned vs total possible ----
+        num_matches = conn.execute("SELECT COUNT(*) FROM matches").fetchone()[0]
+        wild_max = conn.execute(
+            "SELECT COALESCE(SUM(points), 0) FROM wildcards").fetchone()[0] or 0
+        total_max = num_matches * config.MATCH_EXACT_SCORE + wild_max
+        played = conn.execute("SELECT COUNT(*) FROM match_results").fetchone()[0]
+        st.markdown(f"**Points earned — {earned:g} / {total_max:g} possible**")
+        st.progress(min(max(earned / total_max, 0.0), 1.0) if total_max else 0.0)
+        st.caption(f"{played} of {num_matches} matches have results in · "
+                   "fills as the organiser enters results.")
+
+        st.divider()
+
+        # ---- today's matches (Norwegian time) with your prediction ----
+        st.subheader("📅 Today's matches")
+        today = datetime.now(OSLO_TZ).date()
+        preds = {p["match_id"]: p for p in conn.execute(
+            "SELECT * FROM match_predictions WHERE participant_id=?", (pid,))}
+        todays = []
+        for m in conn.execute(
+                "SELECT * FROM matches ORDER BY kickoff_utc, match_id"):
+            iso = m["kickoff_utc"]
+            if not iso:
+                continue
+            try:
+                dt = datetime.fromisoformat(iso).astimezone(OSLO_TZ)
+            except ValueError:
+                continue
+            if dt.date() == today:
+                todays.append((dt, m))
+        if not todays:
+            st.caption("No matches kick off today. 💤")
+        else:
+            ko_today = any(m["is_knockout"] for _, m in todays)
+            bracket = knockout.resolve_bracket(conn, pid) if ko_today else {}
+            trows = []
+            for dt, m in todays:
+                if m["is_knockout"] and m["match_id"] in bracket:
+                    slot = bracket[m["match_id"]]
+                    matchup = f"{slot['home_label']} vs {slot['away_label']}"
+                else:
+                    matchup = f"{m['home_label']} vs {m['away_label']}"
+                p = preds.get(m["match_id"])
+                pick = f"{p['pred_home']}–{p['pred_away']}" if p else "—"
+                trows.append({"Time (NO)": dt.strftime("%H:%M"),
+                              "Match": matchup, "Your pick": pick})
+            st.dataframe(trows, hide_index=True, use_container_width=True)
+
+        st.divider()
+
+        # ---- progress counters ----
         nmatch = conn.execute(
-            "SELECT COUNT(*) FROM match_predictions WHERE participant_id=?", (ss().pid,)
+            "SELECT COUNT(*) FROM match_predictions WHERE participant_id=?", (pid,)
         ).fetchone()[0]
         nwild = conn.execute(
-            "SELECT COUNT(*) FROM wildcard_predictions WHERE participant_id=?",
-            (ss().pid,),
+            "SELECT COUNT(*) FROM wildcard_predictions WHERE participant_id=?", (pid,)
         ).fetchone()[0]
         nwild_total = conn.execute("SELECT COUNT(*) FROM wildcards").fetchone()[0]
-        c1, c2 = st.columns(2)
-        c1.metric("Your match picks", f"{nmatch} / 104")
-        c2.metric("Wildcard picks", f"{nwild} / {nwild_total}")
-        if dbmod.final_submitted(conn, ss().pid):
+        d1, d2 = st.columns(2)
+        d1.metric("Your match picks", f"{nmatch} / {num_matches}")
+        d2.metric("Wildcard picks", f"{nwild} / {nwild_total}")
+        if dbmod.final_submitted(conn, pid):
             st.success("✅ Your predictions are submitted and locked in.")
         st.caption(
-            "Use the sidebar to navigate. Start with **My profile** to design your jersey!"
+            "Use the top nav to navigate. Start with **My profile** to design your jersey!"
         )
     else:
         need_login()
@@ -588,7 +688,7 @@ elif page == "🎯 Match picks":
         pid = ss().pid
         scopes = dbmod.locked_scopes(conn, pid)
         submitted_final = dbmod.final_submitted(conn, pid, scopes)
-        can_edit = not player_locked(pid)
+        # editability is decided per-stage further down (group g / knockout)
 
         if submitted_final:
             st.markdown(
@@ -661,19 +761,29 @@ elif page == "🎯 Match picks":
                     gcols = st.columns(2)
                     for i, g in enumerate(groups):
                         is_locked = f"group:{g}" in scopes
+                        org_locked = dbmod.group_pred_locked(conn, g)
+                        suffix = " 🔒" if org_locked else (" ✓" if is_locked else "")
                         btn_type = "primary" if ss().sel_group == g else "secondary"
                         if gcols[i % 2].button(
-                            f"Group {g}" + (" ✓" if is_locked else ""),
+                            f"Group {g}{suffix}",
                             key=f"gbtn_{g}", type=btn_type, use_container_width=True,
                         ):
                             ss().sel_group = g
                             st.rerun()
+                    st.caption("🟢 = you locked it in · 🔒 = closed by organiser")
                 with right:
                     g = ss().sel_group
+                    can_edit = group_editable(g, pid)
                     st.subheader(
                         f"Group {g}"
                         + ("  🟢 locked in" if f"group:{g}" in scopes else "")
                     )
+                    if dbmod.group_pred_locked(conn, g):
+                        st.info("🔒 Group " + g + " predictions are closed by the "
+                                "organiser — viewing only.")
+                    elif submitted_final:
+                        st.caption("Your predictions are submitted — ask an admin to "
+                                   "unlock to edit.")
                     gmatches = conn.execute(
                         "SELECT * FROM matches WHERE group_code=? "
                         "ORDER BY matchday, match_id", (g,),
@@ -735,6 +845,13 @@ elif page == "🎯 Match picks":
                     + ", ".join(f"Group {g}" for g in missing)
                 )
             else:
+                can_edit = knockout_editable(pid)
+                if dbmod.knockout_pred_locked(conn):
+                    st.info("🔒 Knockout predictions are closed by the organiser — "
+                            "viewing only.")
+                elif submitted_final:
+                    st.caption("Your predictions are submitted — ask an admin to "
+                               "unlock to edit.")
                 st.caption(
                     ("🟢 Knockout picks are locked in."
                      if ko_done else
@@ -846,12 +963,13 @@ elif page == "🃏 Wildcards":
     lock_banner()
     if not logged_in():
         need_login()
-    elif player_locked(ss().pid):
+    elif not wildcards_editable(ss().pid):
         if dbmod.final_submitted(conn, ss().pid):
             st.warning("Your predictions are submitted and locked — ask an admin "
                        "to unlock if you need to edit wildcards.")
         else:
-            st.warning("Predictions are locked — you can't edit wildcards now.")
+            st.warning("Wildcard predictions are closed by the organiser — "
+                       "viewing only.")
     else:
         pid = ss().pid
         teams = team_options()
@@ -905,14 +1023,14 @@ elif page == "🃏 Wildcards":
 # =========================================================================== #
 elif page == "🗳️ Predictions":
     st.header("🗳️ Predictions")
-    locked = dbmod.predictions_locked(conn)
+    locked = reveal_others()
     if not logged_in():
         need_login()
     else:
         if not locked:
             st.info("You can review **your own** predictions here. Everyone "
-                    "else's unlock automatically once the organiser locks "
-                    "predictions — no peeking before then. 🙈")
+                    "else's unlock automatically once the organiser locks the "
+                    "first stage — no peeking before then. 🙈")
         modes = ["My predictions"] + (["Compare everyone"] if locked else [])
         mode = st.radio("View", modes, horizontal=True)
         cat = st.radio("Category", ["Match picks", "Wildcards"],
@@ -1121,14 +1239,33 @@ elif page == "🔐 Admin":
 
     st.success("Admin unlocked.")
 
-    # ---- prediction lock toggle ----
-    locked = dbmod.predictions_locked(conn)
-    st.subheader("Prediction lock")
-    st.caption("Turn this ON at the deadline so nobody can change their picks.")
-    new_locked = st.toggle("🔒 Predictions locked", value=locked)
-    if new_locked != locked:
-        dbmod.set_predictions_locked(conn, new_locked)
-        st.success(f"Predictions are now {'LOCKED' if new_locked else 'OPEN'}.")
+    # ---- per-stage prediction locks ----
+    st.subheader("Prediction locks")
+    st.caption("Lock each stage as it kicks off so picks freeze for everyone. "
+               "Stages left open stay editable — so late registrants can still "
+               "enter them.")
+
+    st.markdown("**Group stage** — lock each group when it starts:")
+    grps = dbmod.GROUP_CODES
+    for rowg in (grps[:6], grps[6:]):
+        gcols = st.columns(6)
+        for i, g in enumerate(rowg):
+            cur = dbmod.group_pred_locked(conn, g)
+            new = gcols[i].toggle(f"Grp {g}", value=cur, key=f"glock_g_{g}")
+            if new != cur:
+                dbmod.set_group_pred_locked(conn, g, new)
+                st.rerun()
+
+    lc1, lc2 = st.columns(2)
+    ko_cur = dbmod.knockout_pred_locked(conn)
+    ko_new = lc1.toggle("🔒 Lock knockout predictions", value=ko_cur, key="glock_ko")
+    if ko_new != ko_cur:
+        dbmod.set_knockout_pred_locked(conn, ko_new)
+        st.rerun()
+    wc_cur = dbmod.wildcards_pred_locked(conn)
+    wc_new = lc2.toggle("🔒 Lock wildcard predictions", value=wc_cur, key="glock_wc")
+    if wc_new != wc_cur:
+        dbmod.set_wildcards_pred_locked(conn, wc_new)
         st.rerun()
 
     st.divider()

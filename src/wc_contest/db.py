@@ -136,6 +136,45 @@ def set_predictions_locked(conn, locked: bool) -> None:
 
 
 # --------------------------------------------------------------------------- #
+# Global per-stage admin locks (independent of each player's own lock-in).
+# Let the organiser freeze the group stage group-by-group as each kicks off,
+# and the knockout / wildcards separately — so late registrants can still enter
+# whatever stage is still open.
+# --------------------------------------------------------------------------- #
+def group_pred_locked(conn, gcode) -> bool:
+    return get_setting(conn, f"glock_group_{gcode}", "0") == "1"
+
+
+def set_group_pred_locked(conn, gcode, locked: bool) -> None:
+    set_setting(conn, f"glock_group_{gcode}", "1" if locked else "0")
+
+
+def any_group_pred_locked(conn) -> bool:
+    return any(group_pred_locked(conn, g) for g in GROUP_CODES)
+
+
+def knockout_pred_locked(conn) -> bool:
+    return get_setting(conn, "glock_knockout", "0") == "1"
+
+
+def set_knockout_pred_locked(conn, locked: bool) -> None:
+    set_setting(conn, "glock_knockout", "1" if locked else "0")
+
+
+def wildcards_pred_locked(conn) -> bool:
+    return get_setting(conn, "glock_wildcards", "0") == "1"
+
+
+def set_wildcards_pred_locked(conn, locked: bool) -> None:
+    set_setting(conn, "glock_wildcards", "1" if locked else "0")
+
+
+def any_stage_locked(conn) -> bool:
+    return (any_group_pred_locked(conn) or knockout_pred_locked(conn)
+            or wildcards_pred_locked(conn))
+
+
+# --------------------------------------------------------------------------- #
 # Wildcard sync: keep the live `wildcards` table in step with seed_data so that
 # question text / type / options / new questions update on existing databases
 # (not just freshly-seeded ones).
