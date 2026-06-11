@@ -1009,6 +1009,15 @@ elif page == "🎯 Match picks":
                     # keystroke — the page only reruns (and the standings update)
                     # when Save or Submit is pressed.
                     with st.form(f"gform_{g}"):
+                        fc1, fc2 = st.columns(2)
+                        with fc1:
+                            g_save = st.form_submit_button(
+                                "💾 Save predictions", disabled=not can_edit,
+                                use_container_width=True)
+                        with fc2:
+                            g_submit = st.form_submit_button(
+                                f"🔒 Submit Group {g}", type="primary",
+                                disabled=not can_edit, use_container_width=True)
                         picks = []
                         for m in gmatches:
                             ex = existing.get(m["match_id"])
@@ -1024,15 +1033,6 @@ elif page == "🎯 Match picks":
                                 label_visibility="collapsed")
                             c4.markdown(f"**{m['away_label']}**")
                             picks.append((m, hv, av))
-                        fc1, fc2 = st.columns(2)
-                        with fc1:
-                            g_save = st.form_submit_button(
-                                "💾 Save predictions", disabled=not can_edit,
-                                use_container_width=True)
-                        with fc2:
-                            g_submit = st.form_submit_button(
-                                f"🔒 Submit Group {g}", type="primary",
-                                disabled=not can_edit, use_container_width=True)
                     if g_save or g_submit:
                         for m, hv, av in picks:
                             upsert(conn, "match_predictions", {
@@ -1094,6 +1094,26 @@ elif page == "🎯 Match picks":
                 if ss().sel_ko not in ko_stages:
                     ss().sel_ko = ko_stages[0]
 
+                # ---- final submit (shown above the round filter) ----
+                if ko_done and not submitted_final and can_edit:
+                    st.markdown("**All groups and knockout rounds are submitted.**")
+                    st.caption("Submitting freezes ALL your picks. An admin can "
+                               "unlock you afterwards if you need changes.")
+                    if st.button("✅ Submit predictions (final)", type="primary"):
+                        dbmod.lock_scope(conn, pid, "final")
+                        conn.commit()
+                        cx_clear_scores()
+                        ss().balloons_done = False
+                        st.success("Predictions submitted and locked! 🎉")
+                        st.rerun()
+                elif not ko_done and not submitted_final:
+                    remaining = [SHORT.get(s, s) for s in ko_stages
+                                 if f"ko:{s}" not in scopes]
+                    st.caption("Submit every knockout round to enable the final "
+                               "**Submit predictions** button. Remaining: "
+                               + ", ".join(remaining))
+                st.divider()
+
                 # green tiles for submitted rounds
                 sub_idx = [i for i, s in enumerate(ko_stages) if f"ko:{s}" in scopes]
                 if sub_idx:
@@ -1132,6 +1152,14 @@ elif page == "🎯 Match picks":
 
                 picks = []
                 with st.form(f"koform_{stage}"):
+                    fc1, fc2 = st.columns(2)
+                    with fc1:
+                        k_save = st.form_submit_button(
+                            "💾 Save", disabled=not can_edit, use_container_width=True)
+                    with fc2:
+                        k_submit = st.form_submit_button(
+                            f"🔒 Submit {SHORT.get(stage, stage)}", type="primary",
+                            disabled=not can_edit, use_container_width=True)
                     ncol = 2 if len(stage_matches) > 1 else 1
                     cols = st.columns(ncol)
                     for i, m in enumerate(stage_matches):
@@ -1169,14 +1197,6 @@ elif page == "🎯 Match picks":
                             picks.append((mid, hv, av, adv))
                             st.markdown("<div class='ko-gap'></div>",
                                         unsafe_allow_html=True)
-                    fc1, fc2 = st.columns(2)
-                    with fc1:
-                        k_save = st.form_submit_button(
-                            "💾 Save", disabled=not can_edit, use_container_width=True)
-                    with fc2:
-                        k_submit = st.form_submit_button(
-                            f"🔒 Submit {SHORT.get(stage, stage)}", type="primary",
-                            disabled=not can_edit, use_container_width=True)
                 if k_save or k_submit:
                     for mid, hv, av, adv in picks:
                         upsert(conn, "match_predictions", {
@@ -1194,29 +1214,6 @@ elif page == "🎯 Match picks":
                         if k_submit else
                         f"{stage} saved — next round's match-ups updated.")
                     st.rerun()
-
-                # final submit: once the knockout stage is locked in
-                st.divider()
-                if ko_done and not submitted_final and can_edit:
-                    st.markdown("**All groups and the knockout stage are locked in.**")
-                    st.caption(
-                        "Submitting freezes ALL your picks. An admin can "
-                        "unlock you afterwards if you need changes."
-                    )
-                    if st.button("✅ Submit predictions (final)", type="primary"):
-                        dbmod.lock_scope(conn, pid, "final")
-                        conn.commit()
-                        cx_clear_scores()
-                        ss().balloons_done = False
-                        st.success("Predictions submitted and locked! 🎉")
-                        st.rerun()
-                elif not ko_done and not submitted_final:
-                    remaining = [SHORT.get(s, s) for s in ko_stages
-                                 if f"ko:{s}" not in scopes]
-                    st.caption(
-                        "Submit every knockout round to enable the final "
-                        "**Submit predictions** button. Remaining: "
-                        + ", ".join(remaining))
 
 # =========================================================================== #
 # WILDCARDS
