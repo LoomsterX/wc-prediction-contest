@@ -252,8 +252,9 @@ st.markdown(
   /* responsive: inline bar on wide screens, hamburger on small */
   .st-key-nav_burger{ display:none; }
   @media (max-width: 820px){
-      .st-key-nav_full{ display:none; }
-      .st-key-nav_burger{ display:block; }
+      .st-key-nav_full,
+      .st-key-nav_full > div[data-testid="stVerticalBlock"]{ display:none !important; }
+      .st-key-nav_burger{ display:block !important; }
   }
   /* account control pinned to the right of the nav row */
   .st-key-acct{ display:flex; justify-content:flex-end; }
@@ -875,8 +876,11 @@ elif page == "🎯 Match picks":
 
         if submitted_final:
             st.markdown(
-                '<div class="lock-banner lock-on">✅ Your predictions are SUBMITTED '
-                "and locked. Ask an admin to unlock if you need to make changes.</div>",
+                '<div class="lock-banner" style="background:rgba(242,166,120,.14);'
+                "border:1px solid #f2a678;color:#f2a678;"
+                'box-shadow:0 0 12px rgba(242,166,120,.4);">✅ Your predictions are '
+                "SUBMITTED and locked. Ask an admin to unlock if you need to make "
+                'changes.</div>',
                 unsafe_allow_html=True,
             )
 
