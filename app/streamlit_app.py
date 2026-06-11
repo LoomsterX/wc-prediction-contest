@@ -1229,9 +1229,13 @@ elif page == "🃏 Wildcards":
         need_login()
     elif not wildcards_editable(ss().pid):
         if dbmod.final_submitted(conn, ss().pid):
-            st.warning(
-                "Your predictions are submitted and locked — ask an admin "
-                "to unlock if you need to edit wildcards."
+            st.markdown(
+                '<div class="lock-banner" style="background:rgba(242,166,120,.14);'
+                "border:1px solid #f2a678;color:#f2a678;"
+                'box-shadow:0 0 12px rgba(242,166,120,.4);">✅ Your predictions are '
+                "submitted and locked. Ask an admin to unlock if you need to edit "
+                'wildcards.</div>',
+                unsafe_allow_html=True,
             )
         else:
             st.warning(
