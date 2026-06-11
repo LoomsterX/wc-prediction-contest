@@ -16,32 +16,33 @@ PATTERNS = ["solid", "stripes", "halves", "sash"]
 # Pixel-art jersey on a 12-wide grid (chunky on purpose). Region per cell is
 # decided in `_jersey_region`; the pattern recolours body cells.
 # --------------------------------------------------------------------------- #
-_GW, _GH = 12, 11
+# Finer grid → smaller pixels (silhouette defined in normalised coords so the
+# resolution is easy to tune).
+_GW, _GH = 24, 24
 
 
 def _jersey_region(col: int, row: int) -> str | None:
+    u = (col + 0.5) / _GW          # 0..1 across, 0..1 down
+    v = (row + 0.5) / _GH
     # collar notch at the very top centre
-    if row == 0 and col in (5, 6):
+    if v <= 0.12 and 0.42 <= u <= 0.58:
         return "collar"
-    # short sleeves: top 3 rows, outer two columns each side
-    if 1 <= row <= 3 and (col in (0, 1) or col in (10, 11)):
+    # short sleeves: top band, outer fifth on each side
+    if v <= 0.30 and (u < 0.20 or u > 0.80):
         return "sleeve"
-    # shoulders (top row over the torso) + torso block (cols 2..9)
-    if row == 0 and 2 <= col <= 9:
-        return "body"
-    if 1 <= row <= 10 and 2 <= col <= 9:
+    # torso (centre column, full height) incl. shoulders
+    if 0.20 <= u <= 0.80 and v <= 0.98:
         return "body"
     return None
 
 
 def _body_fill(col, row, pat, p, s):
     if pat == "stripes":
-        return s if col % 2 == 0 else p
+        return s if (col // 2) % 2 == 0 else p        # 2-px vertical stripes
     if pat == "halves":
-        return s if col >= 6 else p
+        return s if col >= _GW // 2 else p
     if pat == "sash":
-        d = (col - 2) - (row * 8 // _GH)
-        return s if 0 <= d <= 1 else p
+        return s if (_GW - 10) <= (col + row) <= (_GW - 5) else p
     return p
 
 
@@ -58,21 +59,12 @@ def jersey_svg(primary: str = "#1801B4", secondary: str = "#ffffff",
             reg = _jersey_region(col, row)
             if reg is None:
                 continue
-            if reg in ("sleeve", "collar"):
-                fill = s
-            else:
-                fill = _body_fill(col, row, pat, p, s)
+            fill = s if reg in ("sleeve", "collar") else _body_fill(col, row, pat, p, s)
             cells.append(
                 f'<rect x="{col}" y="{row}" width="1" height="1" fill="{fill}"/>')
-    # faint dark pixel-grid outline so the blocks read as distinct pixels
-    grid = (f'<rect x="{col}" y="{row}" width="1" height="1" fill="none" '
-            f'stroke="rgba(0,0,0,0.22)" stroke-width="0.06"/>'
-            for col in range(_GW) for row in range(_GH)
-            if _jersey_region(col, row) is not None)
     return (f'<svg width="{size}" height="{size}" viewBox="0 0 {_GW} {_GH}" '
             f'xmlns="http://www.w3.org/2000/svg" shape-rendering="crispEdges" '
-            f'role="img" aria-label="player jersey">'
-            f'{"".join(cells)}{"".join(grid)}</svg>')
+            f'role="img" aria-label="player jersey">{"".join(cells)}</svg>')
 
 
 def data_uri(primary, secondary, pattern, size=64) -> str:

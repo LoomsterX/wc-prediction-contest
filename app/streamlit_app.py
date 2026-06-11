@@ -291,11 +291,11 @@ st.markdown(
     f"""
 <style>
   .stApp {{ background:
-      url("{_pc}") left 4% bottom 9% / 84px no-repeat,
-      url("{_pm}") right 5% bottom 13% / 66px no-repeat,
-      url("{_pp}") right 15% top 17% / 58px no-repeat,
-      url("{_pc}") left 17% top 24% / 50px no-repeat,
-      url("{_pm}") left 46% bottom 4% / 44px no-repeat,
+      url("{_pc}") left 4% bottom 9% / 34px no-repeat,
+      url("{_pm}") right 5% bottom 13% / 28px no-repeat,
+      url("{_pp}") right 15% top 17% / 26px no-repeat,
+      url("{_pc}") left 17% top 24% / 22px no-repeat,
+      url("{_pm}") left 46% bottom 4% / 20px no-repeat,
       linear-gradient(rgba(111,91,255,.045) 1px, transparent 1px) 0 0 / 100% 24px,
       linear-gradient(90deg, rgba(111,91,255,.045) 1px, transparent 1px) 0 0 / 24px 100%,
       radial-gradient(1100px 560px at 50% -10%, rgba(111,91,255,0.18), transparent 60%),
