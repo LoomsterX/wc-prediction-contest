@@ -972,9 +972,10 @@ elif page == "🎯 Match picks":
         if groups_open or ko_open:
             if st.button(
                 "🎲 Auto-fill remaining (random)",
-                help="Randomly fills every match you haven't entered yet, in any "
-                     "group/round you haven't submitted, with 0–3 scores. Saves as "
-                     "drafts — review and Submit yourself.",
+                help="Gives each team a random score of 0, 1, 2 or 3 for every "
+                     "match you haven't filled yet, in any group/round you "
+                     "haven't submitted. Saved as drafts — review and Submit "
+                     "yourself.",
             ):
                 n = autofill_predictions(pid, scopes, ko_stages)
                 st.success(f"Auto-filled {n} match(es) with random scores "
