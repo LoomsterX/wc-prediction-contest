@@ -636,9 +636,8 @@ def autofill_predictions(pid, scopes, ko_stages):
 PAGES = [
     "🏠 Home",
     "👤 My profile",
-    "🎯 Match picks",
-    "🃏 Wildcards",
-    "🗳️ Predictions",
+    "🎯 Make predictions",
+    "🗳️ See predictions",
     "📅 Matches & results",
     "📊 Leaderboard",
     "🔐 Admin",
@@ -680,6 +679,15 @@ def render_top_nav():
 
 
 page = render_top_nav()
+
+# "Make predictions" is one nav page with a toggle between the match-picks and
+# wildcards views. Render the toggle here and map to the internal page the
+# blocks below already handle (keeps the nav button highlighted as one page).
+if page == "🎯 Make predictions":
+    _mk = st.radio(
+        "Predict", ["🎯 Match picks", "🃏 Wildcards"], horizontal=True,
+        key="mk_sub", label_visibility="collapsed")
+    page = _mk
 
 # =========================================================================== #
 # HOME
@@ -1299,8 +1307,8 @@ elif page == "🃏 Wildcards":
 # =========================================================================== #
 # PREDICTIONS  (own anytime; everyone's only after the lock)
 # =========================================================================== #
-elif page == "🗳️ Predictions":
-    st.header("🗳️ Predictions")
+elif page == "🗳️ See predictions":
+    st.header("🗳️ See predictions")
     locked = reveal_others()
     if not logged_in():
         need_login()
