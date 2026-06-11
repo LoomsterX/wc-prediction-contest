@@ -97,10 +97,17 @@ def _fact_match_points(conn) -> list[dict]:
     date_by_match = {m["match_id"]: m["date"] for m in _matches_resolved(conn)}
     stage_by_match = {m["match_id"]: m["stage"] for m in _matches_resolved(conn)}
     res = {r["match_id"]: r for r in conn.execute("SELECT * FROM match_results")}
+    meta = {m["match_id"]: m for m in conn.execute(
+        "SELECT match_id, group_code, stage, is_knockout FROM matches")}
+    locks = scoring.load_participant_locks(conn)
     rows = []
     for p in conn.execute("SELECT * FROM match_predictions"):
         if p["match_id"] not in res:
             continue
+        m = meta.get(p["match_id"])
+        if m is None or not scoring.prediction_submitted(
+                locks.get(p["participant_id"], set()), m):
+            continue                         # only submitted predictions score
         r = res[p["match_id"]]
         pts, exact = scoring.score_match(
             p["pred_home"], p["pred_away"], r["home_goals"], r["away_goals"],

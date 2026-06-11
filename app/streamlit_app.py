@@ -84,6 +84,67 @@ def get_conn():
 
 conn = get_conn()
 
+
+# --------------------------------------------------------------------------- #
+# Cached read layer. Every conn.execute() opens a pooled connection and commits
+# (a network round-trip on hosted Postgres), so hot pages that re-query static
+# data on every rerun get slow. These caches hold the rarely-changing data in
+# memory and are cleared explicitly when an admin/player mutates the relevant
+# rows. Keep TTLs short so the live app still feels fresh.
+# --------------------------------------------------------------------------- #
+@st.cache_data(ttl=600, show_spinner=False)
+def cx_teams():
+    """Static team dimension: list of dicts (team_id, name, group_code, ...)."""
+    return [dict(r) for r in conn.execute(
+        "SELECT team_id, name, group_code, confederation, is_host "
+        "FROM teams ORDER BY name")]
+
+
+@st.cache_data(ttl=600, show_spinner=False)
+def cx_matches():
+    """Static match dimension (fixtures don't change after seeding)."""
+    return [dict(r) for r in conn.execute(
+        "SELECT * FROM matches ORDER BY matchday, match_id")]
+
+
+@st.cache_data(ttl=10, show_spinner=False)
+def cx_settings():
+    """All settings (lock flags etc.) in one query instead of ~15."""
+    return {r["key"]: r["value"] for r in conn.execute(
+        "SELECT key, value FROM settings")}
+
+
+@st.cache_data(ttl=20, show_spinner=False)
+def cx_leaderboard():
+    """Computed standings — the heaviest read. Short TTL keeps it lively."""
+    return scoring.leaderboard_rows(conn)
+
+
+def cx_clear_settings():
+    cx_settings.clear()
+
+
+def cx_clear_scores():
+    cx_leaderboard.clear()
+
+
+# convenience views over the cached team list
+def team_names():
+    return [t["name"] for t in cx_teams()]
+
+
+def team_name_by_id():
+    return {t["team_id"]: t["name"] for t in cx_teams()}
+
+
+def group_team_names(gcode):
+    return sorted(t["name"] for t in cx_teams() if t["group_code"] == gcode)
+
+
+def setting_on(key):
+    return cx_settings().get(key, "0") == "1"
+
+
 st.markdown(
     """
 <style>
@@ -225,25 +286,30 @@ def logged_in() -> bool:
 
 
 def group_editable(g, pid) -> bool:
-    """Can this player still edit Group g? Open unless the organiser locked that
-    group globally, or the player has submitted their final predictions."""
-    return not dbmod.group_pred_locked(conn, g) and not dbmod.final_submitted(conn, pid)
+    """Can this player still edit Group g? Open unless: the organiser locked the
+    group globally, the player has already SUBMITTED this group (group:<g>), or
+    the player has submitted their final predictions. Draft-saved (but not
+    submitted) groups stay editable."""
+    scopes = dbmod.locked_scopes(conn, pid)
+    return (not setting_on(f"glock_group_{g}")
+            and f"group:{g}" not in scopes
+            and "final" not in scopes)
 
 
 def knockout_editable(pid) -> bool:
-    return not dbmod.knockout_pred_locked(conn) and not dbmod.final_submitted(conn, pid)
+    return not setting_on("glock_knockout") and not dbmod.final_submitted(conn, pid)
 
 
 def wildcards_editable(pid) -> bool:
-    return not dbmod.wildcards_pred_locked(conn) and not dbmod.final_submitted(
-        conn, pid
-    )
+    return not setting_on("glock_wildcards") and not dbmod.final_submitted(conn, pid)
 
 
 def reveal_others() -> bool:
     """Everyone's picks become visible once any stage has been globally locked
     (i.e. the tournament has started)."""
-    return dbmod.any_stage_locked(conn)
+    s = cx_settings()
+    return (s.get("glock_knockout") == "1" or s.get("glock_wildcards") == "1"
+            or any(s.get(f"glock_group_{g}") == "1" for g in dbmod.GROUP_CODES))
 
 
 def jersey_img(primary, secondary, pattern, size=64, cls="jersey-badge"):
@@ -260,7 +326,7 @@ def my_row():
 
 
 def team_options():
-    return [r["name"] for r in conn.execute("SELECT name FROM teams ORDER BY name")]
+    return team_names()
 
 
 # --------------------------------------------------------------------------- #
@@ -355,9 +421,10 @@ def need_login():
 
 
 def lock_banner():
-    g_locked = [g for g in dbmod.GROUP_CODES if dbmod.group_pred_locked(conn, g)]
-    ko = dbmod.knockout_pred_locked(conn)
-    wc = dbmod.wildcards_pred_locked(conn)
+    s = cx_settings()
+    g_locked = [g for g in dbmod.GROUP_CODES if s.get(f"glock_group_{g}") == "1"]
+    ko = s.get("glock_knockout") == "1"
+    wc = s.get("glock_wildcards") == "1"
     if not g_locked and not ko and not wc:
         st.markdown(
             '<div class="lock-banner lock-off">✏️ Predictions are OPEN — Gjør dine predikasjoner før første gruppekamp i hver gruppe.</div>',
@@ -403,15 +470,8 @@ def group_tile_picker(state_key: str, options=None, prefix="Group "):
 
 def group_standings(gcode):
     """Compute W/D/L, GF/GA/GD, Pts for a group from recorded match_results."""
-    names = {
-        r["team_id"]: r["name"] for r in conn.execute("SELECT team_id, name FROM teams")
-    }
-    teams = [
-        r["name"]
-        for r in conn.execute(
-            "SELECT name FROM teams WHERE group_code=? ORDER BY name", (gcode,)
-        )
-    ]
+    names = team_name_by_id()
+    teams = group_team_names(gcode)
     tbl = {t: dict(team=t, P=0, W=0, D=0, L=0, GF=0, GA=0, GD=0, Pts=0) for t in teams}
     q = """SELECT m.home_team_id AS h, m.away_team_id AS a,
                   r.home_goals AS hg, r.away_goals AS ag
@@ -451,15 +511,8 @@ def standings_from_scorelines(gcode, scorelines):
     `scorelines` is an iterable of (home_team_id, away_team_id, home_goals,
     away_goals). Used to show a player's *predicted* standings (live from the
     score inputs, or from their saved picks)."""
-    names = {
-        r["team_id"]: r["name"] for r in conn.execute("SELECT team_id, name FROM teams")
-    }
-    teams = [
-        r["name"]
-        for r in conn.execute(
-            "SELECT name FROM teams WHERE group_code=? ORDER BY name", (gcode,)
-        )
-    ]
+    names = team_name_by_id()
+    teams = group_team_names(gcode)
     tbl = {t: dict(team=t, P=0, W=0, D=0, L=0, GF=0, GA=0, GD=0, Pts=0) for t in teams}
     for hid, aid, hg, ag in scorelines:
         home, away = names.get(hid), names.get(aid)
@@ -830,7 +883,7 @@ elif page == "🎯 Match picks":
                     gcols = st.columns(2)
                     for i, g in enumerate(groups):
                         is_locked = f"group:{g}" in scopes
-                        org_locked = dbmod.group_pred_locked(conn, g)
+                        org_locked = setting_on(f"glock_group_{g}")
                         suffix = " 🔒" if org_locked else (" ✓" if is_locked else "")
                         btn_type = "primary" if ss().sel_group == g else "secondary"
                         if gcols[i % 2].button(
@@ -841,15 +894,15 @@ elif page == "🎯 Match picks":
                         ):
                             ss().sel_group = g
                             st.rerun()
-                    st.caption("🟢 = you locked it in · 🔒 = closed by organiser")
+                    st.caption("🟢 = submitted (scores points) · 🔒 = closed by organiser")
                 with right:
                     g = ss().sel_group
                     can_edit = group_editable(g, pid)
+                    g_submitted = f"group:{g}" in scopes
                     st.subheader(
-                        f"Group {g}"
-                        + ("  🟢 locked in" if f"group:{g}" in scopes else "")
+                        f"Group {g}" + ("  🟢 submitted" if g_submitted else "")
                     )
-                    if dbmod.group_pred_locked(conn, g):
+                    if setting_on(f"glock_group_{g}"):
                         st.info(
                             "🔒 Group " + g + " predictions are closed by the "
                             "organiser — viewing only."
@@ -858,6 +911,16 @@ elif page == "🎯 Match picks":
                         st.caption(
                             "Your predictions are submitted — ask an admin to "
                             "unlock to edit."
+                        )
+                    elif g_submitted:
+                        st.info(
+                            "🟢 Group " + g + " is submitted and locked — it counts "
+                            "for points. Ask an admin to unlock if you need changes."
+                        )
+                    else:
+                        st.caption(
+                            "**Save** keeps a draft you can edit later. **Submit** "
+                            "locks the group — only submitted groups score points."
                         )
                     gmatches = conn.execute(
                         "SELECT * FROM matches WHERE group_code=? "
@@ -892,12 +955,7 @@ elif page == "🎯 Match picks":
                         c4.markdown(f"**{m['away_label']}**")
                         picks.append((m, int(hv), int(av)))
 
-                    if st.button(
-                        f"🔒 Lock in Group {g} picks",
-                        type="primary",
-                        disabled=not can_edit,
-                        key=f"lockbtn_{g}",
-                    ):
+                    def _save_group_picks():
                         for m, hv, av in picks:
                             upsert(
                                 conn,
@@ -912,9 +970,26 @@ elif page == "🎯 Match picks":
                                 },
                                 ["participant_id", "match_id"],
                             )
+
+                    bcol1, bcol2 = st.columns(2)
+                    if bcol1.button(
+                        "💾 Save predictions", disabled=not can_edit,
+                        key=f"save_{g}", use_container_width=True,
+                    ):
+                        _save_group_picks()
+                        conn.commit()
+                        st.success(f"Group {g} draft saved — not submitted yet "
+                                   "(won't score until you submit).")
+                        st.rerun()
+                    if bcol2.button(
+                        f"🔒 Submit Group {g}", type="primary", disabled=not can_edit,
+                        key=f"submit_{g}", use_container_width=True,
+                    ):
+                        _save_group_picks()
                         dbmod.lock_scope(conn, pid, f"group:{g}")
                         conn.commit()
-                        st.success(f"Group {g} picks locked in! ⚽")
+                        st.success(f"Group {g} submitted & locked! ⚽ "
+                                   "It now counts for points.")
                         st.rerun()
 
                     # Predicted standings — recomputed live from the inputs above.
@@ -929,11 +1004,11 @@ elif page == "🎯 Match picks":
                         )
                     )
                     st.caption(
-                        "🟢 = top 2 advance. Updates as you edit · "
+                        "🟢 = top 2 advance. Updates live · "
                         + (
-                            "locked in."
-                            if f"group:{g}" in scopes
-                            else "press **Lock in** to save."
+                            "submitted & locked."
+                            if g_submitted
+                            else "Save a draft, or Submit to lock it in for points."
                         )
                     )
 
@@ -1631,23 +1706,33 @@ elif page == "🔐 Admin":
                     except Exception:
                         st.error("Could not save — is that display name already taken?")
 
-        st.markdown("**Prediction submission**")
+        st.markdown("**Prediction submission** (submitted = locked & scores points)")
         u_scopes = dbmod.locked_scopes(conn, upid)
-        if dbmod.final_submitted(conn, upid, u_scopes):
-            st.caption(f"🔒 {who} has **submitted** their predictions (frozen).")
-            if st.button(
-                "🔓 Unlock predictions (allow edits)",
-                use_container_width=True,
-                key="mu_unlock",
-            ):
-                dbmod.unlock_scope(conn, upid, "final")
-                st.success(f"{who} can edit their predictions again.")
-                st.rerun()
-        else:
-            n_glocked = sum(1 for g in dbmod.GROUP_CODES if f"group:{g}" in u_scopes)
-            st.caption(
-                f"✏️ {who} has not submitted yet ({n_glocked}/12 groups locked in)."
-            )
+        sub_groups = sorted(g for g in dbmod.GROUP_CODES if f"group:{g}" in u_scopes)
+        ko_count = sum(1 for s in u_scopes if s.startswith("ko:"))
+        is_final = "final" in u_scopes
+        st.caption(
+            f"Submitted groups: {', '.join(sub_groups) or 'none'} "
+            f"({len(sub_groups)}/12) · knockout: {'yes' if ko_count else 'no'} · "
+            f"final submit: {'yes' if is_final else 'no'}"
+        )
+        reopen = st.multiselect(
+            "Reopen specific groups (lets the player edit & re-submit them)",
+            sub_groups, key="mu_reopen_g")
+        ru1, ru2 = st.columns(2)
+        if ru1.button("🔓 Reopen selected groups", disabled=not reopen,
+                      use_container_width=True, key="mu_reopen_btn"):
+            for g in reopen:
+                dbmod.unlock_scope(conn, upid, f"group:{g}")
+            dbmod.unlock_scope(conn, upid, "final")   # can't stay 'final' if a group reopens
+            st.success(f"Reopened groups {', '.join(reopen)} for {who}.")
+            st.rerun()
+        if ru2.button("🔓 Reopen ALL predictions", use_container_width=True,
+                      key="mu_unlock_all"):
+            conn.execute("DELETE FROM pred_locks WHERE participant_id=?", (upid,))
+            st.success(f"All predictions reopened for {who} (groups + knockout + "
+                       "final). They'll need to re-submit to score.")
+            st.rerun()
 
         st.markdown("**Reset actions**")
         rc1, rc2 = st.columns(2)
