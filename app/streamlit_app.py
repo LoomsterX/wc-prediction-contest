@@ -18,6 +18,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
 import os
+import random
 
 import streamlit as st
 
@@ -568,6 +569,66 @@ def match_label(m):
     return f"{m['home_label']} vs {m['away_label']}"
 
 
+def autofill_predictions(pid, scopes, ko_stages):
+    """Random-fill every still-editable, not-yet-predicted match (groups +
+    knockout) with a 0–3 scoreline, plus a random advancing side on knockout
+    draws. Non-destructive: skips matches you've already entered and stages
+    you've submitted or the organiser has locked. Saves as drafts (no submit).
+    Returns the number of matches filled."""
+    if "final" in scopes:
+        return 0
+    have = {x["match_id"] for x in conn.execute(
+        "SELECT match_id FROM match_predictions WHERE participant_id=?", (pid,))}
+    now = dbmod.now_iso()
+    filled = 0
+
+    def put(mid, hg, ag, adv=None):
+        upsert(conn, "match_predictions", {
+            "participant_id": pid, "match_id": mid,
+            "pred_home": hg, "pred_away": ag, "pred_advance": adv,
+            "submitted_at": now,
+        }, ["participant_id", "match_id"])
+
+    # group stage — skip submitted / organiser-locked groups
+    for g in dbmod.GROUP_CODES:
+        if setting_on(f"glock_group_{g}") or f"group:{g}" in scopes:
+            continue
+        for m in cx_matches():
+            if m["is_knockout"] or m["group_code"] != g or m["match_id"] in have:
+                continue
+            put(m["match_id"], random.randint(0, 3), random.randint(0, 3))
+            have.add(m["match_id"])
+            filled += 1
+
+    # knockout — cascade in round order so each round's match-ups reflect the
+    # winners just filled in the previous round
+    if not setting_on("glock_knockout"):
+        for stage in ko_stages:
+            if f"ko:{stage}" in scopes:
+                continue
+            bracket = knockout.resolve_bracket(conn, pid)
+            stage_ms = sorted(
+                (m for m in cx_matches()
+                 if m["is_knockout"] and m["stage"] == stage),
+                key=lambda mm: int(str(mm["match_id"]).rsplit("_", 1)[-1]))
+            for m in stage_ms:
+                mid = m["match_id"]
+                if mid in have:
+                    continue
+                hg, ag = random.randint(0, 3), random.randint(0, 3)
+                adv = None
+                if hg == ag:
+                    slot = bracket.get(mid, {})
+                    hid, aid = slot.get("home_id"), slot.get("away_id")
+                    if hid is not None and aid is not None:
+                        adv = random.choice([hid, aid])
+                put(mid, hg, ag, adv)
+                have.add(mid)
+                filled += 1
+    conn.commit()
+    return filled
+
+
 # --------------------------------------------------------------------------- #
 # Top header navigation (boxes + hover/active; hamburger on small screens)
 # --------------------------------------------------------------------------- #
@@ -859,6 +920,24 @@ elif page == "🎯 Match picks":
 """,
             unsafe_allow_html=True,
         )
+
+        # ---- Auto-fill: random scores for everything still open ----
+        groups_open = [g for g in dbmod.GROUP_CODES
+                       if not setting_on(f"glock_group_{g}")
+                       and f"group:{g}" not in scopes and not submitted_final]
+        ko_open = (not setting_on("glock_knockout") and not submitted_final
+                   and any(f"ko:{s}" not in scopes for s in ko_stages))
+        if groups_open or ko_open:
+            if st.button(
+                "🎲 Auto-fill remaining (random)",
+                help="Randomly fills every match you haven't entered yet, in any "
+                     "group/round you haven't submitted, with 0–3 scores. Saves as "
+                     "drafts — review and Submit yourself.",
+            ):
+                n = autofill_predictions(pid, scopes, ko_stages)
+                st.success(f"Auto-filled {n} match(es) with random scores "
+                           "(saved as drafts). Review, then Submit each stage.")
+                st.rerun()
 
         view = st.radio("Stage", ["Group stage", "Knockout"], horizontal=True)
 
