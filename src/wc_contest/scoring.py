@@ -120,14 +120,43 @@ def compute_scores(conn: sqlite3.Connection) -> list[ParticipantScore]:
     return ranked
 
 
+# --------------------------------------------------------------------------- #
+# Submission gating: a match prediction only counts once the player has
+# SUBMITTED (locked) that match's stage — the group it belongs to (group:<G>)
+# or the knockout round (ko:<stage>), or a full final submit. Draft-saved but
+# un-submitted picks score nothing.
+# --------------------------------------------------------------------------- #
+def match_required_scope(m) -> str:
+    return f"ko:{m['stage']}" if m["is_knockout"] else f"group:{m['group_code']}"
+
+
+def load_participant_locks(conn) -> dict[int, set]:
+    out: dict[int, set] = {}
+    for r in conn.execute("SELECT participant_id, scope FROM pred_locks"):
+        out.setdefault(r["participant_id"], set()).add(r["scope"])
+    return out
+
+
+def prediction_submitted(scopes: set, m) -> bool:
+    return "final" in scopes or match_required_scope(m) in scopes
+
+
 def _score_matches(conn, scores) -> None:
     results = {r["match_id"]: r for r in conn.execute("SELECT * FROM match_results")}
     if not results:
         return
+    meta = {m["match_id"]: m for m in conn.execute(
+        "SELECT match_id, group_code, stage, is_knockout FROM matches")}
+    locks = load_participant_locks(conn)
     for p in conn.execute("SELECT * FROM match_predictions"):
         res = results.get(p["match_id"])
         if res is None:
             continue
+        m = meta.get(p["match_id"])
+        if m is None:
+            continue
+        if not prediction_submitted(locks.get(p["participant_id"], set()), m):
+            continue                         # only submitted predictions score
         pts, exact = score_match(
             p["pred_home"], p["pred_away"],
             res["home_goals"], res["away_goals"],
