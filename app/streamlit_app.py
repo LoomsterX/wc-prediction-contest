@@ -260,6 +260,22 @@ st.markdown(
   .st-key-acct{ display:flex; justify-content:flex-end; }
   .brand{ font-family:var(--tech); font-weight:700; color:#cdd6f4;
           padding:8px 2px; font-size:16px; letter-spacing:.03em; }
+  /* keep both prediction toggles compact rather than full-width
+     (~300px per choice → ~600px for the two-option toggle) */
+  .st-key-mk_toggle, .st-key-mp_toggle{ max-width:600px; }
+  /* Make-predictions toggle — matches the top-nav menu items, so it reads as a
+     section selector and is visually distinct from the in-page Stage toggle */
+  .st-key-mk_toggle .stButton button{
+      font-family:var(--tech) !important; letter-spacing:.02em; font-weight:600;
+      border:1px solid var(--line) !important; border-radius:6px !important;
+      background:#11152a !important; color:#cdd6f4 !important; box-shadow:none !important; }
+  .st-key-mk_toggle .stButton button:hover{
+      border-color:var(--neon2) !important; color:#fff !important;
+      box-shadow:0 0 12px rgba(41,240,255,.45) !important; transform:translateY(-1px); }
+  .st-key-mk_toggle .stButton button[kind="primary"]{
+      background:linear-gradient(180deg,#1801B4,#3a23c9) !important;
+      border:1px solid var(--neon) !important; color:#fff !important;
+      box-shadow:0 0 16px rgba(111,91,255,.65) !important; }
 </style>
 """,
     unsafe_allow_html=True,
@@ -450,6 +466,22 @@ def lock_banner():
 
 
 GROUPS_AL = [chr(c) for c in range(ord("A"), ord("L") + 1)]
+
+
+def tile_toggle(state_key: str, options: list[str], default: str | None = None):
+    """Render options as a row of equal-width box buttons (same look as the
+    group filters); the selected one is highlighted. Returns the selection."""
+    ss().setdefault(state_key, default or options[0])
+    if ss()[state_key] not in options:
+        ss()[state_key] = options[0]
+    cols = st.columns(len(options))
+    for i, opt in enumerate(options):
+        typ = "primary" if ss()[state_key] == opt else "secondary"
+        if cols[i].button(opt, key=f"{state_key}_{i}", type=typ,
+                          use_container_width=True):
+            ss()[state_key] = opt
+            st.rerun()
+    return ss()[state_key]
 
 
 def group_tile_picker(state_key: str, options=None, prefix="Group "):
@@ -684,10 +716,8 @@ page = render_top_nav()
 # wildcards views. Render the toggle here and map to the internal page the
 # blocks below already handle (keeps the nav button highlighted as one page).
 if page == "🎯 Make predictions":
-    _mk = st.radio(
-        "Predict", ["🎯 Match picks", "🃏 Wildcards"], horizontal=True,
-        key="mk_sub", label_visibility="collapsed")
-    page = _mk
+    with st.container(key="mk_toggle"):
+        page = tile_toggle("mk_view", ["🎯 Match picks", "🃏 Wildcards"])
 
 # =========================================================================== #
 # HOME
@@ -951,7 +981,8 @@ elif page == "🎯 Match picks":
                            "(saved as drafts). Review, then Submit each stage.")
                 st.rerun()
 
-        view = st.radio("Stage", ["Group stage", "Knockout"], horizontal=True)
+        with st.container(key="mp_toggle"):
+            view = tile_toggle("mp_view", ["Group stage", "Knockout"])
 
         # ------------------------------------------------------------------- #
         if view == "Group stage":
