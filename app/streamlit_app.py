@@ -574,7 +574,7 @@ if page == "🏠 Home":
         """
     <div class="wc-hero">
       <div class="ball">⚽</div>
-      <h1>VM 2026 — SWON GAMES </h1>
+      <h1>SWON GAMES - VM 2026 </h1>
       <p>Hvem er best til å forutse resultatene i årest fotball-vm? Gjør dine predikasjoner og konkurrer om premien! 🏆</p>
     </div>
     """,
@@ -654,13 +654,7 @@ if page == "🏠 Home":
                     matchup = f"{m['home_label']} vs {m['away_label']}"
                 p = preds.get(m["match_id"])
                 pick = f"{p['pred_home']}–{p['pred_away']}" if p else "—"
-                trows.append(
-                    {
-                        "Time (NO)": dt.strftime("%H:%M"),
-                        "Match": matchup,
-                        "Your pick": pick,
-                    }
-                )
+                trows.append({"Match": matchup, "Your pick": pick})
             st.dataframe(trows, hide_index=True, use_container_width=True)
 
         st.divider()
