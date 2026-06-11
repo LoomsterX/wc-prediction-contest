@@ -281,6 +281,33 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
+# --- retro background: a finer pixel grid + a few neon pixel footballers ---
+# (static so it costs nothing per rerun; sprites sit in the page background,
+#  always behind content)
+_pc = avatar.pixel_player_uri("#29f0ff")   # cyan
+_pm = avatar.pixel_player_uri("#ff5d9e")   # magenta
+_pp = avatar.pixel_player_uri("#9b7bff")   # purple
+st.markdown(
+    f"""
+<style>
+  .stApp {{ background:
+      url("{_pc}") left 4% bottom 9% / 84px no-repeat,
+      url("{_pm}") right 5% bottom 13% / 66px no-repeat,
+      url("{_pp}") right 15% top 17% / 58px no-repeat,
+      url("{_pc}") left 17% top 24% / 50px no-repeat,
+      url("{_pm}") left 46% bottom 4% / 44px no-repeat,
+      linear-gradient(rgba(111,91,255,.045) 1px, transparent 1px) 0 0 / 100% 24px,
+      linear-gradient(90deg, rgba(111,91,255,.045) 1px, transparent 1px) 0 0 / 24px 100%,
+      radial-gradient(1100px 560px at 50% -10%, rgba(111,91,255,0.18), transparent 60%),
+      #0a0c16;
+      background-attachment: fixed; }}
+  /* keep the kit avatars crisp & blocky when scaled up */
+  .jersey-badge {{ image-rendering: pixelated; }}
+</style>
+""",
+    unsafe_allow_html=True,
+)
+
 
 # --------------------------------------------------------------------------- #
 # Session / auth helpers
