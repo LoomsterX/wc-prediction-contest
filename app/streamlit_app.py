@@ -64,7 +64,11 @@ try:
 except Exception:
     pass
 
-st.set_page_config(page_title="VM 2026 SWON-GAMES", page_icon="⚽", layout="wide")
+st.set_page_config(
+    page_title="VM 2026 SWON-GAMES",
+    page_icon=":material/sports_soccer:",
+    layout="wide",
+)
 
 
 # --------------------------------------------------------------------------- #
@@ -247,6 +251,11 @@ st.markdown(
       background:linear-gradient(180deg,#1801B4,#3a23c9) !important;
       border:1px solid var(--neon) !important; color:#fff !important;
       box-shadow:0 0 16px rgba(111,91,255,.65) !important; }
+  /* neon-tint the monochrome Material icons in the nav buttons */
+  .st-key-nav_full [data-testid="stIconMaterial"],
+  .st-key-nav_burger [data-testid="stIconMaterial"]{
+      color:var(--neon) !important;
+      filter:drop-shadow(0 0 5px rgba(111,91,255,.7)); }
   .nav-bar{ border-bottom:1px solid var(--neon); padding:6px 0 12px; margin-bottom:14px;
             box-shadow:0 6px 18px -12px rgba(111,91,255,.6); }
   /* responsive: inline bar on wide screens, hamburger on small */
@@ -665,27 +674,31 @@ def autofill_predictions(pid, scopes, ko_stages):
 # --------------------------------------------------------------------------- #
 # Top header navigation (boxes + hover/active; hamburger on small screens)
 # --------------------------------------------------------------------------- #
-PAGES = [
-    "🏠 Home",
-    "👤 My profile",
-    "🎯 Make predictions",
-    "🗳️ See predictions",
-    "📅 Matches & results",
-    "📊 Leaderboard",
-    "🔐 Admin",
+# Each nav item: (page key used in `page == ...` checks, Material icon, label).
+# The emoji key is kept only as a stable identifier; the button shows the
+# monochrome Material icon (neon-coloured via CSS) + text instead.
+NAV = [
+    ("🏠 Home", ":material/home:", "Home"),
+    ("👤 My profile", ":material/person:", "My profile"),
+    ("🎯 Make predictions", ":material/edit_square:", "Make predictions"),
+    ("🗳️ See predictions", ":material/visibility:", "See predictions"),
+    ("📅 Matches & results", ":material/calendar_month:", "Matches & results"),
+    ("📊 Leaderboard", ":material/leaderboard:", "Leaderboard"),
+    ("🔐 Admin", ":material/admin_panel_settings:", "Admin"),
 ]
+PAGES = [key for key, _icon, _label in NAV]
 ss().setdefault("nav_page", PAGES[0])
 
 
 def _nav_buttons(prefix):
-    for p in PAGES:
+    for key, icon, label in NAV:
         if st.button(
-            p,
-            key=f"{prefix}_{p}",
-            type="primary" if ss().nav_page == p else "secondary",
+            f"{icon} {label}",
+            key=f"{prefix}_{key}",
+            type="primary" if ss().nav_page == key else "secondary",
             use_container_width=(prefix == "burger"),
         ):
-            ss().nav_page = p
+            ss().nav_page = key
             st.rerun()
 
 
