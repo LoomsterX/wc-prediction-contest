@@ -639,7 +639,7 @@ if page == "🏠 Home":
         pid = ss().pid
 
         # ---- ranking summary: rank, points, deficit to leader ----
-        rows = scoring.leaderboard_rows(conn)
+        rows = cx_leaderboard()
         me = next((r for r in rows if r["participant_id"] == pid), None)
         leader = rows[0] if rows else None
         earned = me["total_points"] if me else 0
@@ -988,6 +988,7 @@ elif page == "🎯 Match picks":
                         _save_group_picks()
                         dbmod.lock_scope(conn, pid, f"group:{g}")
                         conn.commit()
+                        cx_clear_scores()
                         st.success(f"Group {g} submitted & locked! ⚽ "
                                    "It now counts for points.")
                         st.rerun()
@@ -1023,7 +1024,7 @@ elif page == "🎯 Match picks":
                 )
             else:
                 can_edit = knockout_editable(pid)
-                if dbmod.knockout_pred_locked(conn):
+                if setting_on("glock_knockout"):
                     st.info(
                         "🔒 Knockout predictions are closed by the organiser — "
                         "viewing only."
@@ -1146,6 +1147,7 @@ elif page == "🎯 Match picks":
                         for s in ko_stages:
                             dbmod.lock_scope(conn, pid, f"ko:{s}")
                         conn.commit()
+                        cx_clear_scores()
                         st.success(
                             "Knockout picks saved! Match-ups for the next "
                             "rounds now reflect your results. 🏆"
@@ -1163,6 +1165,7 @@ elif page == "🎯 Match picks":
                     if st.button("✅ Submit predictions (final)", type="primary"):
                         dbmod.lock_scope(conn, pid, "final")
                         conn.commit()
+                        cx_clear_scores()
                         ss().balloons_done = False
                         st.success("Predictions submitted and locked! 🎉")
                         st.rerun()
@@ -1453,7 +1456,7 @@ elif page == "📊 Leaderboard":
         unsafe_allow_html=True,
     )
     st.write("")
-    rows = scoring.leaderboard_rows(conn)
+    rows = cx_leaderboard()
     profiles = {
         r["participant_id"]: r for r in conn.execute("SELECT * FROM participants")
     }
@@ -1560,6 +1563,7 @@ elif page == "🔐 Admin":
             new = gcols[i].toggle(f"Grp {g}", value=cur, key=f"glock_g_{g}")
             if new != cur:
                 dbmod.set_group_pred_locked(conn, g, new)
+                cx_clear_settings()
                 st.rerun()
 
     lc1, lc2 = st.columns(2)
@@ -1567,11 +1571,13 @@ elif page == "🔐 Admin":
     ko_new = lc1.toggle("🔒 Lock knockout predictions", value=ko_cur, key="glock_ko")
     if ko_new != ko_cur:
         dbmod.set_knockout_pred_locked(conn, ko_new)
+        cx_clear_settings()
         st.rerun()
     wc_cur = dbmod.wildcards_pred_locked(conn)
     wc_new = lc2.toggle("🔒 Lock wildcard predictions", value=wc_cur, key="glock_wc")
     if wc_new != wc_cur:
         dbmod.set_wildcards_pred_locked(conn, wc_new)
+        cx_clear_settings()
         st.rerun()
 
     st.divider()
@@ -1618,6 +1624,7 @@ elif page == "🔐 Admin":
                     },
                     ["match_id"],
                 )
+            cx_clear_scores()
             st.success(f"Saved {len(entries)} result(s).")
 
     st.divider()
@@ -1645,6 +1652,7 @@ elif page == "🔐 Admin":
                             },
                             ["wildcard_id"],
                         )
+                cx_clear_scores()
                 st.success("Wildcard results saved.")
 
     st.divider()
@@ -1725,11 +1733,13 @@ elif page == "🔐 Admin":
             for g in reopen:
                 dbmod.unlock_scope(conn, upid, f"group:{g}")
             dbmod.unlock_scope(conn, upid, "final")   # can't stay 'final' if a group reopens
+            cx_clear_scores()
             st.success(f"Reopened groups {', '.join(reopen)} for {who}.")
             st.rerun()
         if ru2.button("🔓 Reopen ALL predictions", use_container_width=True,
                       key="mu_unlock_all"):
             conn.execute("DELETE FROM pred_locks WHERE participant_id=?", (upid,))
+            cx_clear_scores()
             st.success(f"All predictions reopened for {who} (groups + knockout + "
                        "final). They'll need to re-submit to score.")
             st.rerun()
