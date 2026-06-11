@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-06-08T21:40:43.839161+00:00",
+  "generated_at": "2026-06-11T10:59:04.111971+00:00",
   "meta": {
     "participants": 10,
     "matches_total": 104,
@@ -8,150 +8,190 @@
   "leaderboard": [
     {
       "rank": 1,
-      "participant_id": 10,
-      "name": "Silje",
-      "total_points": 57.0,
-      "match_points": 52.0,
+      "participant_id": 1,
+      "name": "Sondre",
+      "total_points": 62.5,
+      "match_points": 53.0,
       "outcome_points": 0.0,
-      "wildcard_points": 5.0,
-      "exact_score_hits": 5
+      "wildcard_points": 9.5,
+      "exact_score_hits": 5,
+      "shirt_primary": "#e2231a",
+      "shirt_secondary": "#ffffff",
+      "shirt_pattern": "solid",
+      "favorite_team": "Switzerland"
     },
     {
       "rank": 2,
-      "participant_id": 3,
-      "name": "Lars",
-      "total_points": 56.5,
-      "match_points": 50.0,
+      "participant_id": 2,
+      "name": "Ingrid",
+      "total_points": 59.5,
+      "match_points": 56.0,
       "outcome_points": 0.0,
-      "wildcard_points": 6.5,
-      "exact_score_hits": 4
+      "wildcard_points": 3.5,
+      "exact_score_hits": 3,
+      "shirt_primary": "#0b3d91",
+      "shirt_secondary": "#0b1020",
+      "shirt_pattern": "stripes",
+      "favorite_team": "Canada"
     },
     {
       "rank": 3,
-      "participant_id": 2,
-      "name": "Ingrid",
-      "total_points": 56.0,
-      "match_points": 56.0,
+      "participant_id": 8,
+      "name": "Nina",
+      "total_points": 56.5,
+      "match_points": 53.0,
       "outcome_points": 0.0,
-      "wildcard_points": 0.0,
-      "exact_score_hits": 4
+      "wildcard_points": 3.5,
+      "exact_score_hits": 2,
+      "shirt_primary": "#0a6b3c",
+      "shirt_secondary": "#0b1020",
+      "shirt_pattern": "sash",
+      "favorite_team": "Tunisia"
     },
     {
       "rank": 4,
-      "participant_id": 7,
-      "name": "Erik",
-      "total_points": 53.0,
-      "match_points": 53.0,
+      "participant_id": 6,
+      "name": "Kari",
+      "total_points": 56.0,
+      "match_points": 51.0,
       "outcome_points": 0.0,
-      "wildcard_points": 0.0,
-      "exact_score_hits": 1
+      "wildcard_points": 5.0,
+      "exact_score_hits": 6,
+      "shirt_primary": "#d85a30",
+      "shirt_secondary": "#0b1020",
+      "shirt_pattern": "stripes",
+      "favorite_team": "Argentina"
     },
     {
       "rank": 5,
-      "participant_id": 5,
-      "name": "Jonas",
-      "total_points": 52.0,
+      "participant_id": 4,
+      "name": "Mette",
+      "total_points": 55.5,
       "match_points": 52.0,
       "outcome_points": 0.0,
-      "wildcard_points": 0.0,
-      "exact_score_hits": 5
+      "wildcard_points": 3.5,
+      "exact_score_hits": 3,
+      "shirt_primary": "#1d9e75",
+      "shirt_secondary": "#0b1020",
+      "shirt_pattern": "sash",
+      "favorite_team": "Panama"
     },
     {
       "rank": 6,
-      "participant_id": 6,
-      "name": "Kari",
-      "total_points": 52.0,
-      "match_points": 47.0,
+      "participant_id": 7,
+      "name": "Erik",
+      "total_points": 51.5,
+      "match_points": 48.0,
       "outcome_points": 0.0,
-      "wildcard_points": 5.0,
-      "exact_score_hits": 2
+      "wildcard_points": 3.5,
+      "exact_score_hits": 5,
+      "shirt_primary": "#185fa5",
+      "shirt_secondary": "#ffffff",
+      "shirt_pattern": "halves",
+      "favorite_team": "Turkey"
     },
     {
       "rank": 7,
       "participant_id": 9,
       "name": "Ola",
-      "total_points": 49.5,
-      "match_points": 48.0,
+      "total_points": 47.5,
+      "match_points": 44.0,
       "outcome_points": 0.0,
-      "wildcard_points": 1.5,
-      "exact_score_hits": 3
+      "wildcard_points": 3.5,
+      "exact_score_hits": 5,
+      "shirt_primary": "#111111",
+      "shirt_secondary": "#ffffff",
+      "shirt_pattern": "solid",
+      "favorite_team": "Netherlands"
     },
     {
       "rank": 8,
-      "participant_id": 8,
-      "name": "Nina",
-      "total_points": 49.0,
-      "match_points": 49.0,
+      "participant_id": 3,
+      "name": "Lars",
+      "total_points": 43.5,
+      "match_points": 40.0,
       "outcome_points": 0.0,
-      "wildcard_points": 0.0,
-      "exact_score_hits": 4
+      "wildcard_points": 3.5,
+      "exact_score_hits": 4,
+      "shirt_primary": "#f3b521",
+      "shirt_secondary": "#ffffff",
+      "shirt_pattern": "halves",
+      "favorite_team": "Argentina"
     },
     {
       "rank": 9,
-      "participant_id": 1,
-      "name": "Sondre",
-      "total_points": 46.0,
-      "match_points": 43.0,
+      "participant_id": 10,
+      "name": "Silje",
+      "total_points": 41.0,
+      "match_points": 36.0,
       "outcome_points": 0.0,
-      "wildcard_points": 3.0,
-      "exact_score_hits": 4
+      "wildcard_points": 5.0,
+      "exact_score_hits": 2,
+      "shirt_primary": "#d4537e",
+      "shirt_secondary": "#0b1020",
+      "shirt_pattern": "stripes",
+      "favorite_team": "Saudi Arabia"
     },
     {
       "rank": 10,
-      "participant_id": 4,
-      "name": "Mette",
-      "total_points": 43.0,
-      "match_points": 43.0,
+      "participant_id": 5,
+      "name": "Jonas",
+      "total_points": 36.5,
+      "match_points": 27.0,
       "outcome_points": 0.0,
-      "wildcard_points": 0.0,
-      "exact_score_hits": 4
+      "wildcard_points": 9.5,
+      "exact_score_hits": 1,
+      "shirt_primary": "#7f77dd",
+      "shirt_secondary": "#ffffff",
+      "shirt_pattern": "solid",
+      "favorite_team": "Ecuador"
     }
   ],
   "timeline": {
     "Sondre": [
       {
         "date": "2026-06-11",
-        "y": 5.0
+        "y": 2.0
       },
       {
         "date": "2026-06-12",
-        "y": 12.0
+        "y": 2.0
       },
       {
         "date": "2026-06-13",
-        "y": 12.0
+        "y": 4.0
       },
       {
         "date": "2026-06-14",
-        "y": 15.0
+        "y": 14.0
       },
       {
         "date": "2026-06-15",
-        "y": 22.0
+        "y": 19.0
       },
       {
         "date": "2026-06-16",
-        "y": 29.0
+        "y": 27.0
       },
       {
         "date": "2026-06-17",
-        "y": 33.0
+        "y": 34.0
       },
       {
         "date": "2026-06-18",
-        "y": 33.0
+        "y": 41.0
       },
       {
         "date": "2026-06-19",
-        "y": 33.0
+        "y": 48.0
       },
       {
         "date": "2026-06-20",
-        "y": 38.0
+        "y": 51.0
       },
       {
         "date": "2026-06-21",
-        "y": 43.0
+        "y": 53.0
       }
     ],
     "Ingrid": [
@@ -161,144 +201,6 @@
       },
       {
         "date": "2026-06-12",
-        "y": 10.0
-      },
-      {
-        "date": "2026-06-13",
-        "y": 10.0
-      },
-      {
-        "date": "2026-06-14",
-        "y": 14.0
-      },
-      {
-        "date": "2026-06-15",
-        "y": 23.0
-      },
-      {
-        "date": "2026-06-16",
-        "y": 33.0
-      },
-      {
-        "date": "2026-06-17",
-        "y": 40.0
-      },
-      {
-        "date": "2026-06-18",
-        "y": 48.0
-      },
-      {
-        "date": "2026-06-19",
-        "y": 53.0
-      },
-      {
-        "date": "2026-06-20",
-        "y": 53.0
-      },
-      {
-        "date": "2026-06-21",
-        "y": 56.0
-      }
-    ],
-    "Lars": [
-      {
-        "date": "2026-06-11",
-        "y": 7.0
-      },
-      {
-        "date": "2026-06-12",
-        "y": 10.0
-      },
-      {
-        "date": "2026-06-13",
-        "y": 10.0
-      },
-      {
-        "date": "2026-06-14",
-        "y": 12.0
-      },
-      {
-        "date": "2026-06-15",
-        "y": 14.0
-      },
-      {
-        "date": "2026-06-16",
-        "y": 21.0
-      },
-      {
-        "date": "2026-06-17",
-        "y": 30.0
-      },
-      {
-        "date": "2026-06-18",
-        "y": 39.0
-      },
-      {
-        "date": "2026-06-19",
-        "y": 39.0
-      },
-      {
-        "date": "2026-06-20",
-        "y": 39.0
-      },
-      {
-        "date": "2026-06-21",
-        "y": 50.0
-      }
-    ],
-    "Mette": [
-      {
-        "date": "2026-06-11",
-        "y": 0.0
-      },
-      {
-        "date": "2026-06-12",
-        "y": 0.0
-      },
-      {
-        "date": "2026-06-13",
-        "y": 2.0
-      },
-      {
-        "date": "2026-06-14",
-        "y": 4.0
-      },
-      {
-        "date": "2026-06-15",
-        "y": 6.0
-      },
-      {
-        "date": "2026-06-16",
-        "y": 15.0
-      },
-      {
-        "date": "2026-06-17",
-        "y": 22.0
-      },
-      {
-        "date": "2026-06-18",
-        "y": 24.0
-      },
-      {
-        "date": "2026-06-19",
-        "y": 33.0
-      },
-      {
-        "date": "2026-06-20",
-        "y": 41.0
-      },
-      {
-        "date": "2026-06-21",
-        "y": 43.0
-      }
-    ],
-    "Jonas": [
-      {
-        "date": "2026-06-11",
-        "y": 2.0
-      },
-      {
-        "date": "2026-06-12",
         "y": 7.0
       },
       {
@@ -307,7 +209,7 @@
       },
       {
         "date": "2026-06-14",
-        "y": 12.0
+        "y": 10.0
       },
       {
         "date": "2026-06-15",
@@ -319,23 +221,161 @@
       },
       {
         "date": "2026-06-17",
-        "y": 37.0
+        "y": 34.0
       },
       {
         "date": "2026-06-18",
-        "y": 41.0
+        "y": 36.0
       },
       {
         "date": "2026-06-19",
-        "y": 41.0
+        "y": 44.0
       },
       {
         "date": "2026-06-20",
-        "y": 43.0
+        "y": 44.0
+      },
+      {
+        "date": "2026-06-21",
+        "y": 56.0
+      }
+    ],
+    "Lars": [
+      {
+        "date": "2026-06-11",
+        "y": 5.0
+      },
+      {
+        "date": "2026-06-12",
+        "y": 7.0
+      },
+      {
+        "date": "2026-06-13",
+        "y": 9.0
+      },
+      {
+        "date": "2026-06-14",
+        "y": 11.0
+      },
+      {
+        "date": "2026-06-15",
+        "y": 13.0
+      },
+      {
+        "date": "2026-06-16",
+        "y": 20.0
+      },
+      {
+        "date": "2026-06-17",
+        "y": 22.0
+      },
+      {
+        "date": "2026-06-18",
+        "y": 29.0
+      },
+      {
+        "date": "2026-06-19",
+        "y": 31.0
+      },
+      {
+        "date": "2026-06-20",
+        "y": 38.0
+      },
+      {
+        "date": "2026-06-21",
+        "y": 40.0
+      }
+    ],
+    "Mette": [
+      {
+        "date": "2026-06-11",
+        "y": 5.0
+      },
+      {
+        "date": "2026-06-12",
+        "y": 9.0
+      },
+      {
+        "date": "2026-06-13",
+        "y": 16.0
+      },
+      {
+        "date": "2026-06-14",
+        "y": 16.0
+      },
+      {
+        "date": "2026-06-15",
+        "y": 20.0
+      },
+      {
+        "date": "2026-06-16",
+        "y": 33.0
+      },
+      {
+        "date": "2026-06-17",
+        "y": 45.0
+      },
+      {
+        "date": "2026-06-18",
+        "y": 47.0
+      },
+      {
+        "date": "2026-06-19",
+        "y": 49.0
+      },
+      {
+        "date": "2026-06-20",
+        "y": 49.0
       },
       {
         "date": "2026-06-21",
         "y": 52.0
+      }
+    ],
+    "Jonas": [
+      {
+        "date": "2026-06-11",
+        "y": 2.0
+      },
+      {
+        "date": "2026-06-12",
+        "y": 5.0
+      },
+      {
+        "date": "2026-06-13",
+        "y": 5.0
+      },
+      {
+        "date": "2026-06-14",
+        "y": 7.0
+      },
+      {
+        "date": "2026-06-15",
+        "y": 7.0
+      },
+      {
+        "date": "2026-06-16",
+        "y": 11.0
+      },
+      {
+        "date": "2026-06-17",
+        "y": 15.0
+      },
+      {
+        "date": "2026-06-18",
+        "y": 15.0
+      },
+      {
+        "date": "2026-06-19",
+        "y": 20.0
+      },
+      {
+        "date": "2026-06-20",
+        "y": 27.0
+      },
+      {
+        "date": "2026-06-21",
+        "y": 27.0
       }
     ],
     "Kari": [
@@ -345,43 +385,43 @@
       },
       {
         "date": "2026-06-12",
-        "y": 3.0
-      },
-      {
-        "date": "2026-06-13",
-        "y": 8.0
-      },
-      {
-        "date": "2026-06-14",
         "y": 10.0
       },
       {
+        "date": "2026-06-13",
+        "y": 10.0
+      },
+      {
+        "date": "2026-06-14",
+        "y": 15.0
+      },
+      {
         "date": "2026-06-15",
-        "y": 12.0
+        "y": 17.0
       },
       {
         "date": "2026-06-16",
-        "y": 18.0
+        "y": 28.0
       },
       {
         "date": "2026-06-17",
-        "y": 22.0
+        "y": 34.0
       },
       {
         "date": "2026-06-18",
-        "y": 26.0
-      },
-      {
-        "date": "2026-06-19",
-        "y": 35.0
-      },
-      {
-        "date": "2026-06-20",
         "y": 39.0
       },
       {
+        "date": "2026-06-19",
+        "y": 46.0
+      },
+      {
+        "date": "2026-06-20",
+        "y": 51.0
+      },
+      {
         "date": "2026-06-21",
-        "y": 47.0
+        "y": 51.0
       }
     ],
     "Erik": [
@@ -395,99 +435,145 @@
       },
       {
         "date": "2026-06-13",
-        "y": 6.0
+        "y": 11.0
       },
       {
         "date": "2026-06-14",
-        "y": 6.0
+        "y": 22.0
       },
       {
         "date": "2026-06-15",
-        "y": 12.0
+        "y": 26.0
       },
       {
         "date": "2026-06-16",
-        "y": 23.0
-      },
-      {
-        "date": "2026-06-17",
-        "y": 28.0
-      },
-      {
-        "date": "2026-06-18",
-        "y": 30.0
-      },
-      {
-        "date": "2026-06-19",
         "y": 34.0
       },
       {
-        "date": "2026-06-20",
-        "y": 46.0
-      },
-      {
-        "date": "2026-06-21",
-        "y": 53.0
-      }
-    ],
-    "Nina": [
-      {
-        "date": "2026-06-11",
-        "y": 4.0
-      },
-      {
-        "date": "2026-06-12",
-        "y": 7.0
-      },
-      {
-        "date": "2026-06-13",
-        "y": 7.0
-      },
-      {
-        "date": "2026-06-14",
-        "y": 7.0
-      },
-      {
-        "date": "2026-06-15",
-        "y": 7.0
-      },
-      {
-        "date": "2026-06-16",
-        "y": 18.0
-      },
-      {
         "date": "2026-06-17",
-        "y": 28.0
+        "y": 39.0
       },
       {
         "date": "2026-06-18",
-        "y": 40.0
+        "y": 46.0
       },
       {
         "date": "2026-06-19",
-        "y": 45.0
+        "y": 46.0
       },
       {
         "date": "2026-06-20",
-        "y": 47.0
+        "y": 48.0
       },
       {
         "date": "2026-06-21",
-        "y": 49.0
+        "y": 48.0
       }
     ],
-    "Ola": [
+    "Nina": [
       {
         "date": "2026-06-11",
         "y": 2.0
       },
       {
         "date": "2026-06-12",
-        "y": 5.0
+        "y": 6.0
       },
       {
         "date": "2026-06-13",
-        "y": 5.0
+        "y": 8.0
+      },
+      {
+        "date": "2026-06-14",
+        "y": 17.0
+      },
+      {
+        "date": "2026-06-15",
+        "y": 23.0
+      },
+      {
+        "date": "2026-06-16",
+        "y": 32.0
+      },
+      {
+        "date": "2026-06-17",
+        "y": 34.0
+      },
+      {
+        "date": "2026-06-18",
+        "y": 38.0
+      },
+      {
+        "date": "2026-06-19",
+        "y": 42.0
+      },
+      {
+        "date": "2026-06-20",
+        "y": 49.0
+      },
+      {
+        "date": "2026-06-21",
+        "y": 53.0
+      }
+    ],
+    "Ola": [
+      {
+        "date": "2026-06-11",
+        "y": 0.0
+      },
+      {
+        "date": "2026-06-12",
+        "y": 2.0
+      },
+      {
+        "date": "2026-06-13",
+        "y": 7.0
+      },
+      {
+        "date": "2026-06-14",
+        "y": 9.0
+      },
+      {
+        "date": "2026-06-15",
+        "y": 16.0
+      },
+      {
+        "date": "2026-06-16",
+        "y": 22.0
+      },
+      {
+        "date": "2026-06-17",
+        "y": 29.0
+      },
+      {
+        "date": "2026-06-18",
+        "y": 36.0
+      },
+      {
+        "date": "2026-06-19",
+        "y": 36.0
+      },
+      {
+        "date": "2026-06-20",
+        "y": 44.0
+      },
+      {
+        "date": "2026-06-21",
+        "y": 44.0
+      }
+    ],
+    "Silje": [
+      {
+        "date": "2026-06-11",
+        "y": 2.0
+      },
+      {
+        "date": "2026-06-12",
+        "y": 4.0
+      },
+      {
+        "date": "2026-06-13",
+        "y": 6.0
       },
       {
         "date": "2026-06-14",
@@ -495,77 +581,31 @@
       },
       {
         "date": "2026-06-15",
-        "y": 17.0
+        "y": 21.0
       },
       {
         "date": "2026-06-16",
-        "y": 26.0
-      },
-      {
-        "date": "2026-06-17",
         "y": 28.0
       },
       {
-        "date": "2026-06-18",
-        "y": 32.0
-      },
-      {
-        "date": "2026-06-19",
-        "y": 37.0
-      },
-      {
-        "date": "2026-06-20",
-        "y": 43.0
-      },
-      {
-        "date": "2026-06-21",
-        "y": 48.0
-      }
-    ],
-    "Silje": [
-      {
-        "date": "2026-06-11",
-        "y": 5.0
-      },
-      {
-        "date": "2026-06-12",
-        "y": 7.0
-      },
-      {
-        "date": "2026-06-13",
-        "y": 7.0
-      },
-      {
-        "date": "2026-06-14",
-        "y": 12.0
-      },
-      {
-        "date": "2026-06-15",
-        "y": 22.0
-      },
-      {
-        "date": "2026-06-16",
-        "y": 32.0
-      },
-      {
         "date": "2026-06-17",
-        "y": 41.0
+        "y": 30.0
       },
       {
         "date": "2026-06-18",
-        "y": 41.0
+        "y": 34.0
       },
       {
         "date": "2026-06-19",
-        "y": 43.0
+        "y": 36.0
       },
       {
         "date": "2026-06-20",
-        "y": 50.0
+        "y": 36.0
       },
       {
         "date": "2026-06-21",
-        "y": 52.0
+        "y": 36.0
       }
     ]
   },
@@ -580,8 +620,8 @@
       "home_team": "Mexico",
       "away_team": "South Africa",
       "is_knockout": 0,
-      "home_goals": 0,
-      "away_goals": 2,
+      "home_goals": 1,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -594,8 +634,8 @@
       "home_team": "South Korea",
       "away_team": "Czech Republic",
       "is_knockout": 0,
-      "home_goals": 3,
-      "away_goals": 1,
+      "home_goals": 0,
+      "away_goals": 2,
       "played": 1
     },
     {
@@ -608,8 +648,8 @@
       "home_team": "Canada",
       "away_team": "Bosnia and Herzegovina",
       "is_knockout": 0,
-      "home_goals": 3,
-      "away_goals": 2,
+      "home_goals": 2,
+      "away_goals": 1,
       "played": 1
     },
     {
@@ -622,7 +662,7 @@
       "home_team": "Qatar",
       "away_team": "Switzerland",
       "is_knockout": 0,
-      "home_goals": 3,
+      "home_goals": 0,
       "away_goals": 3,
       "played": 1
     },
@@ -636,8 +676,8 @@
       "home_team": "United States",
       "away_team": "Paraguay",
       "is_knockout": 0,
-      "home_goals": 0,
-      "away_goals": 3,
+      "home_goals": 1,
+      "away_goals": 1,
       "played": 1
     },
     {
@@ -650,8 +690,8 @@
       "home_team": "Australia",
       "away_team": "Turkey",
       "is_knockout": 0,
-      "home_goals": 3,
-      "away_goals": 2,
+      "home_goals": 0,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -664,8 +704,8 @@
       "home_team": "Brazil",
       "away_team": "Morocco",
       "is_knockout": 0,
-      "home_goals": 0,
-      "away_goals": 3,
+      "home_goals": 2,
+      "away_goals": 1,
       "played": 1
     },
     {
@@ -678,7 +718,7 @@
       "home_team": "Haiti",
       "away_team": "Scotland",
       "is_knockout": 0,
-      "home_goals": 1,
+      "home_goals": 3,
       "away_goals": 0,
       "played": 1
     },
@@ -693,7 +733,7 @@
       "away_team": "Curaçao",
       "is_knockout": 0,
       "home_goals": 0,
-      "away_goals": 0,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -706,7 +746,7 @@
       "home_team": "Ivory Coast",
       "away_team": "Ecuador",
       "is_knockout": 0,
-      "home_goals": 3,
+      "home_goals": 2,
       "away_goals": 3,
       "played": 1
     },
@@ -720,8 +760,8 @@
       "home_team": "Netherlands",
       "away_team": "Japan",
       "is_knockout": 0,
-      "home_goals": 1,
-      "away_goals": 0,
+      "home_goals": 3,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -735,7 +775,7 @@
       "away_team": "Tunisia",
       "is_knockout": 0,
       "home_goals": 3,
-      "away_goals": 0,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -749,7 +789,7 @@
       "away_team": "South Korea",
       "is_knockout": 0,
       "home_goals": 1,
-      "away_goals": 3,
+      "away_goals": 1,
       "played": 1
     },
     {
@@ -762,7 +802,7 @@
       "home_team": "Czech Republic",
       "away_team": "South Africa",
       "is_knockout": 0,
-      "home_goals": 3,
+      "home_goals": 2,
       "away_goals": 0,
       "played": 1
     },
@@ -776,8 +816,8 @@
       "home_team": "Belgium",
       "away_team": "Egypt",
       "is_knockout": 0,
-      "home_goals": 2,
-      "away_goals": 1,
+      "home_goals": 1,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -791,7 +831,7 @@
       "away_team": "New Zealand",
       "is_knockout": 0,
       "home_goals": 3,
-      "away_goals": 1,
+      "away_goals": 0,
       "played": 1
     },
     {
@@ -804,8 +844,8 @@
       "home_team": "Spain",
       "away_team": "Cape Verde",
       "is_knockout": 0,
-      "home_goals": 2,
-      "away_goals": 1,
+      "home_goals": 1,
+      "away_goals": 2,
       "played": 1
     },
     {
@@ -818,8 +858,8 @@
       "home_team": "Saudi Arabia",
       "away_team": "Uruguay",
       "is_knockout": 0,
-      "home_goals": 0,
-      "away_goals": 3,
+      "home_goals": 1,
+      "away_goals": 1,
       "played": 1
     },
     {
@@ -833,7 +873,7 @@
       "away_team": "Qatar",
       "is_knockout": 0,
       "home_goals": 2,
-      "away_goals": 0,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -847,7 +887,7 @@
       "away_team": "Bosnia and Herzegovina",
       "is_knockout": 0,
       "home_goals": 3,
-      "away_goals": 2,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -860,8 +900,8 @@
       "home_team": "United States",
       "away_team": "Australia",
       "is_knockout": 0,
-      "home_goals": 1,
-      "away_goals": 3,
+      "home_goals": 3,
+      "away_goals": 0,
       "played": 1
     },
     {
@@ -875,7 +915,7 @@
       "away_team": "Paraguay",
       "is_knockout": 0,
       "home_goals": 0,
-      "away_goals": 0,
+      "away_goals": 1,
       "played": 1
     },
     {
@@ -888,7 +928,7 @@
       "home_team": "France",
       "away_team": "Senegal",
       "is_knockout": 0,
-      "home_goals": 2,
+      "home_goals": 0,
       "away_goals": 1,
       "played": 1
     },
@@ -902,7 +942,7 @@
       "home_team": "Iraq",
       "away_team": "Norway",
       "is_knockout": 0,
-      "home_goals": 1,
+      "home_goals": 3,
       "away_goals": 1,
       "played": 1
     },
@@ -916,8 +956,8 @@
       "home_team": "Argentina",
       "away_team": "Algeria",
       "is_knockout": 0,
-      "home_goals": 3,
-      "away_goals": 1,
+      "home_goals": 2,
+      "away_goals": 0,
       "played": 1
     },
     {
@@ -930,7 +970,7 @@
       "home_team": "Austria",
       "away_team": "Jordan",
       "is_knockout": 0,
-      "home_goals": 0,
+      "home_goals": 2,
       "away_goals": 2,
       "played": 1
     },
@@ -944,8 +984,8 @@
       "home_team": "Brazil",
       "away_team": "Haiti",
       "is_knockout": 0,
-      "home_goals": 1,
-      "away_goals": 3,
+      "home_goals": 2,
+      "away_goals": 0,
       "played": 1
     },
     {
@@ -958,7 +998,7 @@
       "home_team": "Scotland",
       "away_team": "Morocco",
       "is_knockout": 0,
-      "home_goals": 1,
+      "home_goals": 2,
       "away_goals": 1,
       "played": 1
     },
@@ -972,7 +1012,7 @@
       "home_team": "Portugal",
       "away_team": "DR Congo",
       "is_knockout": 0,
-      "home_goals": 2,
+      "home_goals": 1,
       "away_goals": 3,
       "played": 1
     },
@@ -986,8 +1026,8 @@
       "home_team": "Uzbekistan",
       "away_team": "Colombia",
       "is_knockout": 0,
-      "home_goals": 3,
-      "away_goals": 3,
+      "home_goals": 2,
+      "away_goals": 1,
       "played": 1
     },
     {
@@ -1000,8 +1040,8 @@
       "home_team": "England",
       "away_team": "Croatia",
       "is_knockout": 0,
-      "home_goals": 0,
-      "away_goals": 1,
+      "home_goals": 2,
+      "away_goals": 2,
       "played": 1
     },
     {
@@ -1014,8 +1054,8 @@
       "home_team": "Ghana",
       "away_team": "Panama",
       "is_knockout": 0,
-      "home_goals": 1,
-      "away_goals": 1,
+      "home_goals": 3,
+      "away_goals": 0,
       "played": 1
     },
     {
@@ -1029,7 +1069,7 @@
       "away_team": "Ivory Coast",
       "is_knockout": 0,
       "home_goals": 0,
-      "away_goals": 0,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -1042,8 +1082,8 @@
       "home_team": "Ecuador",
       "away_team": "Curaçao",
       "is_knockout": 0,
-      "home_goals": 1,
-      "away_goals": 1,
+      "home_goals": 0,
+      "away_goals": 0,
       "played": 1
     },
     {
@@ -1056,8 +1096,8 @@
       "home_team": "Netherlands",
       "away_team": "Sweden",
       "is_knockout": 0,
-      "home_goals": 0,
-      "away_goals": 3,
+      "home_goals": 2,
+      "away_goals": 2,
       "played": 1
     },
     {
@@ -1070,8 +1110,8 @@
       "home_team": "Tunisia",
       "away_team": "Japan",
       "is_knockout": 0,
-      "home_goals": 1,
-      "away_goals": 2,
+      "home_goals": 3,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -1084,7 +1124,7 @@
       "home_team": "Belgium",
       "away_team": "Iran",
       "is_knockout": 0,
-      "home_goals": 0,
+      "home_goals": 3,
       "away_goals": 3,
       "played": 1
     },
@@ -1098,8 +1138,8 @@
       "home_team": "New Zealand",
       "away_team": "Egypt",
       "is_knockout": 0,
-      "home_goals": 1,
-      "away_goals": 2,
+      "home_goals": 3,
+      "away_goals": 0,
       "played": 1
     },
     {
@@ -1140,8 +1180,8 @@
       "home_team": "France",
       "away_team": "Iraq",
       "is_knockout": 0,
-      "home_goals": 0,
-      "away_goals": 3,
+      "home_goals": 3,
+      "away_goals": 2,
       "played": 1
     },
     {
@@ -1154,7 +1194,7 @@
       "home_team": "Norway",
       "away_team": "Senegal",
       "is_knockout": 0,
-      "home_goals": 3,
+      "home_goals": 2,
       "away_goals": 3,
       "played": 1
     },
@@ -1168,8 +1208,8 @@
       "home_team": "Argentina",
       "away_team": "Austria",
       "is_knockout": 0,
-      "home_goals": 0,
-      "away_goals": 2,
+      "home_goals": 3,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -1183,7 +1223,7 @@
       "away_team": "Algeria",
       "is_knockout": 0,
       "home_goals": 1,
-      "away_goals": 2,
+      "away_goals": 1,
       "played": 1
     },
     {
@@ -1196,8 +1236,8 @@
       "home_team": "Portugal",
       "away_team": "Uzbekistan",
       "is_knockout": 0,
-      "home_goals": 1,
-      "away_goals": 2,
+      "home_goals": 3,
+      "away_goals": 3,
       "played": 1
     },
     {
@@ -1225,7 +1265,7 @@
       "away_team": "Ghana",
       "is_knockout": 0,
       "home_goals": 0,
-      "away_goals": 1,
+      "away_goals": 0,
       "played": 1
     },
     {
@@ -1238,71 +1278,71 @@
       "home_team": "Panama",
       "away_team": "Croatia",
       "is_knockout": 0,
-      "home_goals": 3,
-      "away_goals": 3,
+      "home_goals": 1,
+      "away_goals": 1,
       "played": 1
     }
   ],
   "category_breakdown": [
     {
-      "name": "Silje",
-      "match": 52.0,
+      "name": "Sondre",
+      "match": 53.0,
       "outcome": 0.0,
-      "wildcard": 5.0
-    },
-    {
-      "name": "Lars",
-      "match": 50.0,
-      "outcome": 0.0,
-      "wildcard": 6.5
+      "wildcard": 9.5
     },
     {
       "name": "Ingrid",
       "match": 56.0,
       "outcome": 0.0,
-      "wildcard": 0.0
+      "wildcard": 3.5
     },
     {
-      "name": "Erik",
+      "name": "Nina",
       "match": 53.0,
       "outcome": 0.0,
-      "wildcard": 0.0
-    },
-    {
-      "name": "Jonas",
-      "match": 52.0,
-      "outcome": 0.0,
-      "wildcard": 0.0
+      "wildcard": 3.5
     },
     {
       "name": "Kari",
-      "match": 47.0,
+      "match": 51.0,
       "outcome": 0.0,
       "wildcard": 5.0
     },
     {
-      "name": "Ola",
+      "name": "Mette",
+      "match": 52.0,
+      "outcome": 0.0,
+      "wildcard": 3.5
+    },
+    {
+      "name": "Erik",
       "match": 48.0,
       "outcome": 0.0,
-      "wildcard": 1.5
+      "wildcard": 3.5
     },
     {
-      "name": "Nina",
-      "match": 49.0,
+      "name": "Ola",
+      "match": 44.0,
       "outcome": 0.0,
-      "wildcard": 0.0
+      "wildcard": 3.5
     },
     {
-      "name": "Sondre",
-      "match": 43.0,
+      "name": "Lars",
+      "match": 40.0,
       "outcome": 0.0,
-      "wildcard": 3.0
+      "wildcard": 3.5
     },
     {
-      "name": "Mette",
-      "match": 43.0,
+      "name": "Silje",
+      "match": 36.0,
       "outcome": 0.0,
-      "wildcard": 0.0
+      "wildcard": 5.0
+    },
+    {
+      "name": "Jonas",
+      "match": 27.0,
+      "outcome": 0.0,
+      "wildcard": 9.5
     }
   ]
 }
