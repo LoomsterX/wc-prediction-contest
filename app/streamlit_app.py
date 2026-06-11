@@ -972,9 +972,10 @@ elif page == "🎯 Match picks":
         if groups_open or ko_open:
             if st.button(
                 "🎲 Auto-fill remaining (random)",
-                help="Randomly fills every match you haven't entered yet, in any "
-                     "group/round you haven't submitted, with 0–3 scores. Saves as "
-                     "drafts — review and Submit yourself.",
+                help="Gives each team a random score of 0, 1, 2 or 3 for every "
+                     "match you haven't filled yet, in any group/round you "
+                     "haven't submitted. Saved as drafts — review and Submit "
+                     "yourself.",
             ):
                 n = autofill_predictions(pid, scopes, ko_stages)
                 st.success(f"Auto-filled {n} match(es) with random scores "
@@ -1633,6 +1634,68 @@ elif page == "🔐 Admin":
 
     st.success("Admin unlocked.")
 
+    admin_view = tile_toggle(
+        "admin_section", ["📝 Match scores", "⚙️ Settings & users"])
+    st.divider()
+
+    # ---- subpage: register match scores (filtered, loads on selection) ----
+    if admin_view == "📝 Match scores":
+        st.subheader("📝 Register match scores")
+        st.caption("Pick a stage, then a group or knockout round to load its "
+                   "matches.")
+        kind = st.radio("Stage", ["Group stage", "Knockout"], horizontal=True,
+                        key="adm_stage_kind")
+        if kind == "Group stage":
+            pick = st.selectbox("Group", ["— select —"] + dbmod.GROUP_CODES,
+                                key="adm_group")
+            chosen = ("group", pick) if pick != "— select —" else None
+        else:
+            ko_stages_adm = [
+                r["stage"] for r in conn.execute(
+                    "SELECT stage FROM matches WHERE is_knockout=1 "
+                    "GROUP BY stage ORDER BY MIN(kickoff_utc), MIN(match_id)")]
+            pick = st.selectbox("Knockout round", ["— select —"] + ko_stages_adm,
+                                key="adm_kostage")
+            chosen = ("ko", pick) if pick != "— select —" else None
+
+        if chosen is None:
+            st.info("Select a group or knockout round above to load its matches.")
+        else:
+            ckind, cval = chosen
+            if ckind == "group":
+                ms = conn.execute(
+                    "SELECT * FROM matches WHERE group_code=? AND is_knockout=0 "
+                    "ORDER BY matchday, match_id", (cval,)).fetchall()
+            else:
+                ms = conn.execute(
+                    "SELECT * FROM matches WHERE stage=? AND is_knockout=1 "
+                    "ORDER BY match_id", (cval,)).fetchall()
+            with st.form(f"adm_results_{ckind}_{cval}"):
+                entries = []
+                for m in ms:
+                    cur = conn.execute(
+                        "SELECT * FROM match_results WHERE match_id=?",
+                        (m["match_id"],)).fetchone()
+                    c1, c2, c3 = st.columns([4, 1, 1])
+                    c1.markdown(
+                        f"`{m['match_id']}` {m['home_label']} vs {m['away_label']}")
+                    hg = c2.number_input(
+                        "H", 0, 30, value=cur["home_goals"] if cur else 0,
+                        key=f"arh_{m['match_id']}", label_visibility="collapsed")
+                    ag = c3.number_input(
+                        "A", 0, 30, value=cur["away_goals"] if cur else 0,
+                        key=f"ara_{m['match_id']}", label_visibility="collapsed")
+                    entries.append((m["match_id"], hg, ag))
+                if st.form_submit_button("💾 Save results", type="primary") and entries:
+                    for mid, hg, ag in entries:
+                        upsert(conn, "match_results", {
+                            "match_id": mid, "home_goals": int(hg),
+                            "away_goals": int(ag), "advance": None,
+                        }, ["match_id"])
+                    cx_clear_scores()
+                    st.success(f"Saved {len(entries)} result(s) for {cval}.")
+        st.stop()
+
     # ---- per-stage prediction locks ----
     st.subheader("Prediction locks")
     st.caption(
@@ -1666,53 +1729,6 @@ elif page == "🔐 Admin":
         dbmod.set_wildcards_pred_locked(conn, wc_new)
         cx_clear_settings()
         st.rerun()
-
-    st.divider()
-    st.subheader("Match results")
-    only_unplayed = st.checkbox("Hide matches that already have a result", True)
-    res = {r["match_id"] for r in conn.execute("SELECT match_id FROM match_results")}
-    with st.form("results"):
-        entries = []
-        for m in conn.execute("SELECT * FROM matches ORDER BY kickoff_utc, match_id"):
-            if only_unplayed and m["match_id"] in res:
-                continue
-            cur = conn.execute(
-                "SELECT * FROM match_results WHERE match_id=?", (m["match_id"],)
-            ).fetchone()
-            c1, c2, c3 = st.columns([4, 1, 1])
-            c1.markdown(f"`{m['match_id']}` {m['home_label']} vs {m['away_label']}")
-            hg = c2.number_input(
-                "H",
-                0,
-                30,
-                value=cur["home_goals"] if cur else 0,
-                key=f"rh_{m['match_id']}",
-                label_visibility="collapsed",
-            )
-            ag = c3.number_input(
-                "A",
-                0,
-                30,
-                value=cur["away_goals"] if cur else 0,
-                key=f"ra_{m['match_id']}",
-                label_visibility="collapsed",
-            )
-            entries.append((m["match_id"], hg, ag))
-        if st.form_submit_button("Save match results") and entries:
-            for mid, hg, ag in entries:
-                upsert(
-                    conn,
-                    "match_results",
-                    {
-                        "match_id": mid,
-                        "home_goals": int(hg),
-                        "away_goals": int(ag),
-                        "advance": None,
-                    },
-                    ["match_id"],
-                )
-            cx_clear_scores()
-            st.success(f"Saved {len(entries)} result(s).")
 
     st.divider()
     with st.expander("Wildcard results"):
