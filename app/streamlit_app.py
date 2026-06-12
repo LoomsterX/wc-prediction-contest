@@ -615,9 +615,29 @@ def standings_from_scorelines(gcode, scorelines):
     )
 
 
+def html_table(rows, headers=None):
+    """Render a list-of-dicts as a neon-styled HTML table (same look as the
+    Compare-everyone table) so every table in the app matches. Content is
+    escaped; `headers` optionally maps a column key to a display label.
+    Wrapped for horizontal scroll so wide tables don't overflow the page."""
+    if not rows:
+        return
+    cols = list(rows[0].keys())
+    hmap = headers or {}
+    head = "".join(f"<th>{html.escape(str(hmap.get(c, c)))}</th>" for c in cols)
+    body = ""
+    for r in rows:
+        body += "<tr>" + "".join(
+            f"<td>{html.escape(str(r.get(c, '')))}</td>" for c in cols) + "</tr>"
+    st.markdown(
+        "<div style='overflow-x:auto'><table class='cmp'><thead><tr>"
+        f"{head}</tr></thead><tbody>{body}</tbody></table></div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_standings_table(standings):
-    """Render a standings list as a dataframe with the top-2 (qualifiers)
-    flagged. Expects rows from group_standings / standings_from_scorelines."""
+    """Render a standings list with the top-2 (qualifiers) flagged."""
     rows = []
     for i, s in enumerate(standings):
         rows.append(
@@ -634,7 +654,7 @@ def render_standings_table(standings):
                 "Pts": s["Pts"],
             }
         )
-    st.dataframe(rows, hide_index=True, use_container_width=True)
+    html_table(rows)
 
 
 def match_label(m):
@@ -855,7 +875,7 @@ if page == "🏠 Home":
                 p = preds.get(m["match_id"])
                 pick = f"{p['pred_home']}–{p['pred_away']}" if p else "—"
                 trows.append({"Match": matchup, "Your pick": pick})
-            st.dataframe(trows, hide_index=True, use_container_width=True)
+            html_table(trows)
 
         st.divider()
 
@@ -1444,7 +1464,7 @@ elif page == "🗳️ See predictions":
                             "Pick": f"{p['pred_home']}–{p['pred_away']}" if p else "—",
                         }
                     )
-                st.dataframe(rows, hide_index=True, use_container_width=True)
+                html_table(rows)
                 # predicted standings from this player's saved group picks
                 st.markdown(f":material/leaderboard: **Predicted standings — Group {g}**")
                 scorelines = [
@@ -1473,7 +1493,7 @@ elif page == "🗳️ See predictions":
                         "SELECT * FROM wildcards ORDER BY wildcard_id"
                     )
                 ]
-                st.dataframe(rows, hide_index=True, use_container_width=True)
+                html_table(rows)
 
         if mode == "My predictions":
             st.caption(f"Showing **{ss().pname}**")
@@ -1538,7 +1558,7 @@ elif page == "🗳️ See predictions":
                 st.caption(
                     "Columns are wildcard IDs — see the Wildcards page for the questions."
                 )
-                st.dataframe(rows, hide_index=True, use_container_width=True)
+                html_table(rows)
 
 # =========================================================================== #
 # MATCHES & RESULTS  (per group, tile filter + standings)
@@ -1551,7 +1571,7 @@ elif page == "📅 Matches & results":
     }
     st.subheader(f"Group {g} — standings")
     standings = group_standings(g)
-    st.dataframe(
+    html_table(
         [
             {
                 "Team": s["team"],
@@ -1565,9 +1585,7 @@ elif page == "📅 Matches & results":
                 "Pts": s["Pts"],
             }
             for s in standings
-        ],
-        hide_index=True,
-        use_container_width=True,
+        ]
     )
     st.caption("Top 2 of each group advance, plus the 8 best third-placed teams.")
 
@@ -1588,7 +1606,7 @@ elif page == "📅 Matches & results":
                 "Date": (m["kickoff_utc"] or "")[:10],
             }
         )
-    st.dataframe(frows, hide_index=True, use_container_width=True)
+    html_table(frows)
 
     with st.expander("Knockout results"):
         krows = []
@@ -1607,7 +1625,7 @@ elif page == "📅 Matches & results":
                 }
             )
         if krows:
-            st.dataframe(krows, hide_index=True, use_container_width=True)
+            html_table(krows)
         else:
             st.caption("No knockout results entered yet.")
 
@@ -1630,7 +1648,7 @@ elif page == "📊 Leaderboard":
     else:
         top = rows[:3]
         order = [1, 0, 2]  # render 2nd, 1st, 3rd for podium effect
-        html = ['<div class="podium-wrap">']
+        pod = ['<div class="podium-wrap">']
         crowns = {
             0: "👑",
             1: '<span class="nicon">military_tech</span>',
@@ -1660,15 +1678,15 @@ elif page == "📊 Leaderboard":
                 if slot == 0
                 else ""
             )
-            html.append(
+            pod.append(
                 f'<div class="podium p{slot + 1}">{sparks}'
                 f'<div class="pod-card"><div class="crown">{crowns[slot]}</div>'
                 f'{jersey}<div class="pod-name">{r["name"]}</div>'
                 f'<div class="pod-pts">{r["total_points"]:g} pts · {r["exact_score_hits"]} exact</div></div>'
                 f'<div class="pedestal">{r["rank"]}</div></div>'
             )
-        html.append("</div>")
-        st.markdown("".join(html), unsafe_allow_html=True)
+        pod.append("</div>")
+        st.markdown("".join(pod), unsafe_allow_html=True)
 
         if not ss().balloons_done:
             st.balloons()
@@ -1676,7 +1694,7 @@ elif page == "📊 Leaderboard":
 
         st.write("")
         st.subheader("Full standings")
-        st.dataframe(
+        html_table(
             [
                 {
                     "#": r["rank"],
@@ -1687,9 +1705,7 @@ elif page == "📊 Leaderboard":
                     "Exact scores": r["exact_score_hits"],
                 }
                 for r in rows
-            ],
-            hide_index=True,
-            use_container_width=True,
+            ]
         )
 
 # =========================================================================== #
