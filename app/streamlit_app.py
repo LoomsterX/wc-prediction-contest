@@ -1769,6 +1769,10 @@ elif page == "🔐 Admin":
                 ms = conn.execute(
                     "SELECT * FROM matches WHERE stage=? AND is_knockout=1 "
                     "ORDER BY match_id", (cval,)).fetchall()
+            st.caption("Leave a match **blank** if it hasn't been played yet — "
+                       "only matches with both boxes filled are saved (enter 0 and "
+                       "0 for a real goalless draw). Clearing a saved match removes "
+                       "its result.")
             with st.form(f"adm_results_{ckind}_{cval}"):
                 entries = []
                 for m in ms:
@@ -1779,20 +1783,40 @@ elif page == "🔐 Admin":
                     c1.markdown(
                         f"`{m['match_id']}` {m['home_label']} vs {m['away_label']}")
                     hg = c2.number_input(
-                        "H", 0, 30, value=cur["home_goals"] if cur else 0,
-                        key=f"arh_{m['match_id']}", label_visibility="collapsed")
+                        "H", min_value=0, max_value=30,
+                        value=cur["home_goals"] if cur else None,
+                        key=f"arh_{m['match_id']}", label_visibility="collapsed",
+                        placeholder="–")
                     ag = c3.number_input(
-                        "A", 0, 30, value=cur["away_goals"] if cur else 0,
-                        key=f"ara_{m['match_id']}", label_visibility="collapsed")
-                    entries.append((m["match_id"], hg, ag))
-                if st.form_submit_button(":material/save: Save results", type="primary") and entries:
-                    for mid, hg, ag in entries:
+                        "A", min_value=0, max_value=30,
+                        value=cur["away_goals"] if cur else None,
+                        key=f"ara_{m['match_id']}", label_visibility="collapsed",
+                        placeholder="–")
+                    entries.append((m["match_id"], hg, ag, cur is not None))
+                if st.form_submit_button(":material/save: Save results", type="primary"):
+                    saved = removed = skipped = 0
+                    for mid, hg, ag, had in entries:
+                        if hg is None and ag is None:
+                            if had:                       # cleared a saved result
+                                conn.execute(
+                                    "DELETE FROM match_results WHERE match_id=?", (mid,))
+                                removed += 1
+                            continue                      # blank = not played
+                        if hg is None or ag is None:
+                            skipped += 1                  # only one box filled
+                            continue
                         upsert(conn, "match_results", {
                             "match_id": mid, "home_goals": int(hg),
                             "away_goals": int(ag), "advance": None,
                         }, ["match_id"])
+                        saved += 1
                     cx_clear_scores()
-                    st.success(f"Saved {len(entries)} result(s) for {cval}.")
+                    msg = f"Saved {saved} result(s)"
+                    if removed:
+                        msg += f", removed {removed}"
+                    if skipped:
+                        msg += f" · {skipped} skipped (only one score entered)"
+                    st.success(msg + f" for {cval}.")
         st.stop()
 
     # ---- per-stage prediction locks ----
