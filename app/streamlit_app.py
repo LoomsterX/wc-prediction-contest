@@ -19,6 +19,7 @@ from datetime import datetime, timezone, timedelta
 
 import os
 import random
+import html
 
 import streamlit as st
 
@@ -163,6 +164,14 @@ st.markdown(
       font-style:normal; line-height:1; vertical-align:middle;
       font-feature-settings:'liga'; }
   .nicon { color:var(--neon); filter:drop-shadow(0 0 5px rgba(111,91,255,.7)); }
+  /* "Compare everyone" match-picks table */
+  .cmp { border-collapse:collapse; width:100%; font-size:13px; margin-top:6px; }
+  .cmp th, .cmp td { border:1px solid rgba(111,91,255,.25); padding:6px 8px;
+      text-align:center; }
+  .cmp th { color:var(--neon2); font-family:var(--tech); font-weight:600;
+      vertical-align:bottom; line-height:1.25; white-space:normal; }
+  .cmp td.pl { text-align:left; font-weight:600; white-space:nowrap; }
+  .cmp tbody tr:nth-child(even){ background:rgba(111,91,255,.06); }
   .stApp { background:
       linear-gradient(rgba(111,91,255,.04) 1px, transparent 1px) 0 0 / 100% 28px,
       radial-gradient(1100px 560px at 50% -10%, rgba(111,91,255,0.18), transparent 60%),
@@ -1480,28 +1489,31 @@ elif page == "🗳️ See predictions":
                     )
                 else:
                     ms = conn.execute(
-                        "SELECT * FROM matches WHERE group_code=? ORDER BY matchday, match_id",
-                        (g,),
+                        "SELECT * FROM matches WHERE group_code=? "
+                        "ORDER BY matchday, match_id", (g,),
                     ).fetchall()
-                    cols = {
-                        m[
-                            "match_id"
-                        ]: f"{(m['home_label'] or '')[:3]}–{(m['away_label'] or '')[:3]}"
-                        for m in ms
-                    }
                     allpred = {}
                     for x in conn.execute("SELECT * FROM match_predictions"):
                         allpred[(x["participant_id"], x["match_id"])] = x
-                    rows = []
+                    # one column per match (full names, 3-line header) — avoids the
+                    # abbreviation collisions that previously dropped a column
+                    head = "".join(
+                        f"<th>{html.escape(m['home_label'] or '')}<br>vs.<br>"
+                        f"{html.escape(m['away_label'] or '')}</th>" for m in ms)
+                    body = ""
                     for pid, name in players:
-                        row = {"Player": name}
+                        cells = ""
                         for m in ms:
                             p = allpred.get((pid, m["match_id"]))
-                            row[cols[m["match_id"]]] = (
-                                f"{p['pred_home']}–{p['pred_away']}" if p else "—"
-                            )
-                        rows.append(row)
-                    st.dataframe(rows, hide_index=True, use_container_width=True)
+                            pick = f"{p['pred_home']}–{p['pred_away']}" if p else "—"
+                            cells += f"<td>{pick}</td>"
+                        body += (f"<tr><td class='pl'>{html.escape(name)}</td>"
+                                 f"{cells}</tr>")
+                    st.markdown(
+                        "<table class='cmp'><thead><tr><th>Player</th>"
+                        f"{head}</tr></thead><tbody>{body}</tbody></table>",
+                        unsafe_allow_html=True,
+                    )
             elif not setting_on("glock_wildcards"):
                 st.info(
                     ":material/lock: Everyone's wildcard picks unlock once the organiser locks "
