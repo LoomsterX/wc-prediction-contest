@@ -3,8 +3,10 @@
    Fonts (Press Start 2P, Orbitron) are loaded from index.html. */
 :root {
   --s1-blue: #1801B4;
-  --neon: #6f5bff;          /* electric indigo (glowing brand blue) */
-  --neon-2: #29f0ff;        /* cyan accent */
+  --neon: #6f5bff;
+  /* electric indigo (glowing brand blue) */
+  --neon-2: #29f0ff;
+  /* cyan accent */
   --balihai: #8aa0c0;
 
   --bg: #0a0c16;

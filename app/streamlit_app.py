@@ -154,8 +154,15 @@ st.markdown(
     """
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Orbitron:wght@500;700&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0');
   :root { --neon:#6f5bff; --neon2:#29f0ff; --gold:#ffd23f;
           --pixel:"Press Start 2P", monospace; --tech:"Orbitron", sans-serif; }
+  /* Material Symbols used inside raw HTML (hero, podium, banners). .msym
+     inherits the surrounding colour; .nicon forces the purple neon. */
+  .msym, .nicon { font-family:'Material Symbols Outlined'; font-weight:normal;
+      font-style:normal; line-height:1; vertical-align:middle;
+      font-feature-settings:'liga'; }
+  .nicon { color:var(--neon); filter:drop-shadow(0 0 5px rgba(111,91,255,.7)); }
   .stApp { background:
       linear-gradient(rgba(111,91,255,.04) 1px, transparent 1px) 0 0 / 100% 28px,
       radial-gradient(1100px 560px at 50% -10%, rgba(111,91,255,0.18), transparent 60%),
@@ -251,9 +258,17 @@ st.markdown(
       background:linear-gradient(180deg,#1801B4,#3a23c9) !important;
       border:1px solid var(--neon) !important; color:#fff !important;
       box-shadow:0 0 16px rgba(111,91,255,.65) !important; }
-  /* neon-tint the monochrome Material icons in the nav buttons */
+  /* neon-tint the monochrome Material icons used as app icons (nav, headings,
+     buttons, toggles). Alert status icons (info/warning/etc.) keep their own
+     colour because they live inside stAlert, not these. */
   .st-key-nav_full [data-testid="stIconMaterial"],
-  .st-key-nav_burger [data-testid="stIconMaterial"]{
+  .st-key-nav_burger [data-testid="stIconMaterial"],
+  [data-testid="stHeading"] [data-testid="stIconMaterial"],
+  .stButton [data-testid="stIconMaterial"],
+  .stFormSubmitButton [data-testid="stIconMaterial"],
+  .stDownloadButton [data-testid="stIconMaterial"],
+  [data-testid="stPopover"] [data-testid="stIconMaterial"],
+  [data-testid="stMarkdownContainer"] [data-testid="stIconMaterial"]{
       color:var(--neon) !important;
       filter:drop-shadow(0 0 5px rgba(111,91,255,.7)); }
   .nav-bar{ border-bottom:1px solid var(--neon); padding:6px 0 12px; margin-bottom:14px;
@@ -271,7 +286,8 @@ st.markdown(
           padding:8px 2px; font-size:16px; letter-spacing:.03em; }
   /* keep both prediction toggles compact rather than full-width
      (~300px per choice → ~600px for the two-option toggle) */
-  .st-key-mk_toggle, .st-key-mp_toggle{ max-width:600px; }
+  .st-key-mk_toggle, .st-key-mp_toggle,
+  .st-key-sp_mode_box, .st-key-sp_cat_box{ max-width:600px; }
   /* Make-predictions toggle — matches the top-nav menu items, so it reads as a
      section selector and is visually distinct from the in-page Stage toggle */
   .st-key-mk_toggle .stButton button{
@@ -411,7 +427,7 @@ def render_account():
     with st.container(key="acct"):
         if logged_in():
             r = my_row()
-            with st.popover(f"👤 {ss().pname}"):
+            with st.popover(f":material/account_circle: {ss().pname}"):
                 st.markdown(
                     f'<div style="text-align:center">'
                     f"{jersey_img(r['shirt_primary'], r['shirt_secondary'], r['shirt_pattern'], 84)}"
@@ -426,7 +442,7 @@ def render_account():
                     ss().is_admin = False
                     st.rerun()
         else:
-            with st.popover("🔐 Log in"):
+            with st.popover(":material/login: Log in"):
                 mode = st.radio(
                     "mode",
                     ["Log in", "Sign up"],
@@ -468,7 +484,8 @@ def lock_banner():
     if wc:
         bits.append("wildcards")
     st.markdown(
-        f'<div class="lock-banner lock-on">🔒 Locked by the organiser: '
+        f'<div class="lock-banner lock-on"><span class="msym">lock</span> '
+        f"Locked by the organiser: "
         f"{'; '.join(bits)}. Other stages remain open.</div>",
         unsafe_allow_html=True,
     )
@@ -477,16 +494,20 @@ def lock_banner():
 GROUPS_AL = [chr(c) for c in range(ord("A"), ord("L") + 1)]
 
 
-def tile_toggle(state_key: str, options: list[str], default: str | None = None):
+def tile_toggle(state_key: str, options: list[str], default: str | None = None,
+                labels: list[str] | None = None):
     """Render options as a row of equal-width box buttons (same look as the
-    group filters); the selected one is highlighted. Returns the selection."""
+    group filters); the selected one is highlighted. Returns the selected
+    option key. `labels` (optional) sets the button text shown for each option,
+    so the returned key can stay stable while the display uses Material icons."""
     ss().setdefault(state_key, default or options[0])
     if ss()[state_key] not in options:
         ss()[state_key] = options[0]
     cols = st.columns(len(options))
     for i, opt in enumerate(options):
+        lbl = labels[i] if labels else opt
         typ = "primary" if ss()[state_key] == opt else "secondary"
-        if cols[i].button(opt, key=f"{state_key}_{i}", type=typ,
+        if cols[i].button(lbl, key=f"{state_key}_{i}", type=typ,
                           use_container_width=True):
             ss()[state_key] = opt
             st.rerun()
@@ -710,11 +731,12 @@ def render_top_nav():
             with st.container(key="nav_full"):
                 _nav_buttons("nav")
             with st.container(key="nav_burger"):
-                with st.popover("☰ Menu", use_container_width=True):
+                with st.popover(":material/menu: Menu", use_container_width=True):
                     _nav_buttons("burger")
         else:
             st.markdown(
-                '<div class="brand">⚽ World Cup 2026 — Prediction Contest</div>',
+                '<div class="brand"><span class="nicon">sports_soccer</span> '
+                "World Cup 2026 — Prediction Contest</div>",
                 unsafe_allow_html=True,
             )
     with right:
@@ -730,7 +752,10 @@ page = render_top_nav()
 # blocks below already handle (keeps the nav button highlighted as one page).
 if page == "🎯 Make predictions":
     with st.container(key="mk_toggle"):
-        page = tile_toggle("mk_view", ["🎯 Match picks", "🃏 Wildcards"])
+        page = tile_toggle(
+            "mk_view", ["🎯 Match picks", "🃏 Wildcards"],
+            labels=[":material/sports_soccer: Match picks",
+                    ":material/casino: Wildcards"])
 
 # =========================================================================== #
 # HOME
@@ -739,7 +764,7 @@ if page == "🏠 Home":
     st.markdown(
         """
     <div class="wc-hero">
-      <div class="ball">⚽</div>
+      <div class="ball"><span class="nicon">sports_soccer</span></div>
       <h1>SWON GAMES - VM 2026 </h1>
       <p>Hvem er best til å forutse resultatene i årest fotball-vm? Gjør dine predikasjoner og konkurrer om premien! 🏆</p>
     </div>
@@ -787,7 +812,7 @@ if page == "🏠 Home":
         st.divider()
 
         # ---- today's matches (Norwegian time) with your prediction ----
-        st.subheader("📅 Today's matches")
+        st.subheader(":material/calendar_today: Today's matches")
         today = datetime.now(OSLO_TZ).date()
         preds = {
             p["match_id"]: p
@@ -837,7 +862,7 @@ if page == "🏠 Home":
         d1.metric("Your match picks", f"{nmatch} / {num_matches}")
         d2.metric("Wildcard picks", f"{nwild} / {nwild_total}")
         if dbmod.final_submitted(conn, pid):
-            st.success("✅ Your predictions are submitted and locked in.")
+            st.success("Your predictions are submitted and locked in.", icon=":material/check_circle:")
         st.caption(
             "Use the top nav to navigate. Start with **My profile** to design your jersey!"
         )
@@ -848,7 +873,7 @@ if page == "🏠 Home":
 # MY PROFILE
 # =========================================================================== #
 elif page == "👤 My profile":
-    st.header("👤 My profile")
+    st.header(":material/person: My profile")
     if not logged_in():
         need_login()
     else:
@@ -884,7 +909,7 @@ elif page == "👤 My profile":
                 f'<div style="text-align:center">{jersey_img(prim, sec, pat, 150)}</div>',
                 unsafe_allow_html=True,
             )
-        if st.button("💾 Save profile", type="primary"):
+        if st.button(":material/save: Save profile", type="primary"):
             dbmod.update_profile(
                 conn,
                 ss().pid,
@@ -911,7 +936,7 @@ elif page == "👤 My profile":
 # MATCH PICKS
 # =========================================================================== #
 elif page == "🎯 Match picks":
-    st.header("🎯 Match-by-match predictions")
+    st.header(":material/sports_soccer: Match-by-match predictions")
     st.caption(
         f"Exact score = {config.MATCH_EXACT_SCORE} · correct goal diff = "
         f"{config.MATCH_GOAL_DIFF} · correct result = {config.MATCH_OUTCOME} pts."
@@ -929,7 +954,8 @@ elif page == "🎯 Match picks":
             st.markdown(
                 '<div class="lock-banner" style="background:rgba(242,166,120,.14);'
                 "border:1px solid #f2a678;color:#f2a678;"
-                'box-shadow:0 0 12px rgba(242,166,120,.4);">✅ Your predictions are '
+                'box-shadow:0 0 12px rgba(242,166,120,.4);">'
+                '<span class="msym">check_circle</span> Your predictions are '
                 "SUBMITTED and locked. Ask an admin to unlock if you need to make "
                 'changes.</div>',
                 unsafe_allow_html=True,
@@ -984,7 +1010,7 @@ elif page == "🎯 Match picks":
                    and any(f"ko:{s}" not in scopes for s in ko_stages))
         if groups_open or ko_open:
             if st.button(
-                "🎲 Auto-fill remaining (random)",
+                ":material/casino: Auto-fill remaining (random)",
                 help="Gives each team a random score of 0, 1, 2 or 3 for every "
                      "match you haven't filled yet, in any group/round you "
                      "haven't submitted. Saved as drafts — review and Submit "
@@ -996,7 +1022,10 @@ elif page == "🎯 Match picks":
                 st.rerun()
 
         with st.container(key="mp_toggle"):
-            view = tile_toggle("mp_view", ["Group stage", "Knockout"])
+            view = tile_toggle(
+                "mp_view", ["Group stage", "Knockout"],
+                labels=[":material/groups: Group stage",
+                        ":material/emoji_events: Knockout"])
 
         # ------------------------------------------------------------------- #
         if view == "Group stage":
@@ -1020,7 +1049,8 @@ elif page == "🎯 Match picks":
                     for i, g in enumerate(groups):
                         is_locked = f"group:{g}" in scopes
                         org_locked = setting_on(f"glock_group_{g}")
-                        suffix = " 🔒" if org_locked else (" ✓" if is_locked else "")
+                        suffix = (" :material/lock:" if org_locked
+                                  else (" ✓" if is_locked else ""))
                         btn_type = "primary" if ss().sel_group == g else "secondary"
                         if gcols[i % 2].button(
                             f"Group {g}{suffix}",
@@ -1030,7 +1060,8 @@ elif page == "🎯 Match picks":
                         ):
                             ss().sel_group = g
                             st.rerun()
-                    st.caption("🟢 = submitted (scores points) · 🔒 = closed by organiser")
+                    st.caption("🟢 = submitted (scores points) · "
+                               ":material/lock: = closed by organiser")
                 with right:
                     g = ss().sel_group
                     can_edit = group_editable(g, pid)
@@ -1040,7 +1071,7 @@ elif page == "🎯 Match picks":
                     )
                     if setting_on(f"glock_group_{g}"):
                         st.info(
-                            "🔒 Group " + g + " predictions are closed by the "
+                            ":material/lock: Group " + g + " predictions are closed by the "
                             "organiser — viewing only."
                         )
                     elif submitted_final:
@@ -1069,11 +1100,12 @@ elif page == "🎯 Match picks":
                         fc1, fc2 = st.columns(2)
                         with fc1:
                             g_save = st.form_submit_button(
-                                "💾 Save predictions", disabled=not can_edit,
+                                ":material/save: Save predictions",
+                                disabled=not can_edit,
                                 use_container_width=True)
                         with fc2:
                             g_submit = st.form_submit_button(
-                                f"🔒 Submit Group {g}", type="primary",
+                                f":material/lock: Submit Group {g}", type="primary",
                                 disabled=not can_edit, use_container_width=True)
                         picks = []
                         for m in gmatches:
@@ -1102,13 +1134,13 @@ elif page == "🎯 Match picks":
                             cx_clear_scores()
                         conn.commit()
                         st.success(
-                            f"Group {g} submitted & locked! ⚽ It now counts for points."
+                            f"Group {g} submitted & locked! It now counts for points."
                             if g_submit else
                             f"Group {g} draft saved (won't score until you submit).")
                         st.rerun()
 
                     # Predicted standings — from your SAVED picks (updates on Save/Submit).
-                    st.markdown("**📊 Your predicted standings**")
+                    st.markdown(":material/leaderboard: **Your predicted standings**")
                     saved_lines = [
                         (m["home_team_id"], m["away_team_id"],
                          existing[m["match_id"]]["pred_home"],
@@ -1127,14 +1159,14 @@ elif page == "🎯 Match picks":
             if not groups_done:
                 missing = [g for g in dbmod.GROUP_CODES if f"group:{g}" not in scopes]
                 st.info(
-                    "🔒 Knockout predictions unlock once you've locked in **all 12 "
+                    ":material/lock: Knockout predictions unlock once you've locked in **all 12 "
                     "groups**. Still to lock in: "
                     + ", ".join(f"Group {g}" for g in missing)
                 )
             else:
                 can_edit = knockout_editable(pid)
                 if setting_on("glock_knockout"):
-                    st.info("🔒 Knockout predictions are closed by the organiser — "
+                    st.info(":material/lock: Knockout predictions are closed by the organiser — "
                             "viewing only.")
                 elif submitted_final:
                     st.caption("Your predictions are submitted — ask an admin to "
@@ -1156,7 +1188,8 @@ elif page == "🎯 Match picks":
                     st.markdown("**All groups and knockout rounds are submitted.**")
                     st.caption("Submitting freezes ALL your picks. An admin can "
                                "unlock you afterwards if you need changes.")
-                    if st.button("✅ Submit predictions (final)", type="primary"):
+                    if st.button(":material/check_circle: Submit predictions (final)",
+                                 type="primary"):
                         dbmod.lock_scope(conn, pid, "final")
                         conn.commit()
                         cx_clear_scores()
@@ -1212,10 +1245,12 @@ elif page == "🎯 Match picks":
                     fc1, fc2 = st.columns(2)
                     with fc1:
                         k_save = st.form_submit_button(
-                            "💾 Save", disabled=not can_edit, use_container_width=True)
+                            ":material/save: Save", disabled=not can_edit,
+                            use_container_width=True)
                     with fc2:
                         k_submit = st.form_submit_button(
-                            f"🔒 Submit {SHORT.get(stage, stage)}", type="primary",
+                            f":material/lock: Submit {SHORT.get(stage, stage)}",
+                            type="primary",
                             disabled=not can_edit, use_container_width=True)
                     ncol = 2 if len(stage_matches) > 1 else 1
                     cols = st.columns(ncol)
@@ -1276,7 +1311,7 @@ elif page == "🎯 Match picks":
 # WILDCARDS
 # =========================================================================== #
 elif page == "🃏 Wildcards":
-    st.header("🃏 Wildcard predictions")
+    st.header(":material/casino: Wildcard predictions")
     lock_banner()
     if not logged_in():
         need_login()
@@ -1285,7 +1320,8 @@ elif page == "🃏 Wildcards":
             st.markdown(
                 '<div class="lock-banner" style="background:rgba(242,166,120,.14);'
                 "border:1px solid #f2a678;color:#f2a678;"
-                'box-shadow:0 0 12px rgba(242,166,120,.4);">✅ Your predictions are '
+                'box-shadow:0 0 12px rgba(242,166,120,.4);">'
+                '<span class="msym">check_circle</span> Your predictions are '
                 "submitted and locked. Ask an admin to unlock if you need to edit "
                 'wildcards.</div>',
                 unsafe_allow_html=True,
@@ -1333,7 +1369,7 @@ elif page == "🃏 Wildcards":
                     )
                 if w["hint"]:
                     st.caption(w["hint"])
-            if st.form_submit_button("🔒 Lock in wildcards", type="primary"):
+            if st.form_submit_button(":material/lock: Lock in wildcards", type="primary"):
                 for wid, val in answers.items():
                     if str(val).strip():
                         upsert(
@@ -1353,20 +1389,23 @@ elif page == "🃏 Wildcards":
 # PREDICTIONS  (own anytime; everyone's only after the lock)
 # =========================================================================== #
 elif page == "🗳️ See predictions":
-    st.header("🗳️ See predictions")
-    locked = reveal_others()
+    st.header(":material/visibility: See predictions")
     if not logged_in():
         need_login()
     else:
-        if not locked:
-            st.info(
-                "You can review **your own** predictions here. Everyone "
-                "else's unlock automatically once the organiser locks the "
-                "first stage — no peeking before then. 🙈"
-            )
-        modes = ["My predictions"] + (["Compare everyone"] if locked else [])
-        mode = st.radio("View", modes, horizontal=True)
-        cat = st.radio("Category", ["Match picks", "Wildcards"], horizontal=True)
+        with st.container(key="sp_mode_box"):
+            mode = tile_toggle(
+                "sp_mode", ["My predictions", "Compare everyone"],
+                labels=[":material/person: My predictions",
+                        ":material/groups: Compare everyone"])
+        with st.container(key="sp_cat_box"):
+            cat = tile_toggle(
+                "sp_cat", ["Match picks", "Wildcards"],
+                labels=[":material/sports_soccer: Match picks",
+                        ":material/casino: Wildcards"])
+        if mode == "Compare everyone":
+            st.caption("Everyone's picks for a group or stage are revealed only "
+                       "after the organiser locks it — no peeking before then. 🙈")
         players = [
             (r["participant_id"], r["name"])
             for r in conn.execute(
@@ -1398,7 +1437,7 @@ elif page == "🗳️ See predictions":
                     )
                 st.dataframe(rows, hide_index=True, use_container_width=True)
                 # predicted standings from this player's saved group picks
-                st.markdown(f"**📊 Predicted standings — Group {g}**")
+                st.markdown(f":material/leaderboard: **Predicted standings — Group {g}**")
                 scorelines = [
                     (
                         m["home_team_id"],
@@ -1430,32 +1469,44 @@ elif page == "🗳️ See predictions":
         if mode == "My predictions":
             st.caption(f"Showing **{ss().pname}**")
             render_one(ss().pid, ss().pname)
-        else:  # Compare everyone (locked only)
+        else:  # Compare everyone — reveal only stages the organiser has locked
             if cat == "Match picks":
                 g = group_tile_picker("pred_grp")
-                ms = conn.execute(
-                    "SELECT * FROM matches WHERE group_code=? ORDER BY matchday, match_id",
-                    (g,),
-                ).fetchall()
-                cols = {
-                    m[
-                        "match_id"
-                    ]: f"{(m['home_label'] or '')[:3]}–{(m['away_label'] or '')[:3]}"
-                    for m in ms
-                }
-                allpred = {}
-                for x in conn.execute("SELECT * FROM match_predictions"):
-                    allpred[(x["participant_id"], x["match_id"])] = x
-                rows = []
-                for pid, name in players:
-                    row = {"Player": name}
-                    for m in ms:
-                        p = allpred.get((pid, m["match_id"]))
-                        row[cols[m["match_id"]]] = (
-                            f"{p['pred_home']}–{p['pred_away']}" if p else "—"
-                        )
-                    rows.append(row)
-                st.dataframe(rows, hide_index=True, use_container_width=True)
+                if not setting_on(f"glock_group_{g}"):
+                    st.info(
+                        f":material/lock: Everyone's **Group {g}** picks unlock once the "
+                        f"organiser locks Group {g}. Your own are under "
+                        "**My predictions**."
+                    )
+                else:
+                    ms = conn.execute(
+                        "SELECT * FROM matches WHERE group_code=? ORDER BY matchday, match_id",
+                        (g,),
+                    ).fetchall()
+                    cols = {
+                        m[
+                            "match_id"
+                        ]: f"{(m['home_label'] or '')[:3]}–{(m['away_label'] or '')[:3]}"
+                        for m in ms
+                    }
+                    allpred = {}
+                    for x in conn.execute("SELECT * FROM match_predictions"):
+                        allpred[(x["participant_id"], x["match_id"])] = x
+                    rows = []
+                    for pid, name in players:
+                        row = {"Player": name}
+                        for m in ms:
+                            p = allpred.get((pid, m["match_id"]))
+                            row[cols[m["match_id"]]] = (
+                                f"{p['pred_home']}–{p['pred_away']}" if p else "—"
+                            )
+                        rows.append(row)
+                    st.dataframe(rows, hide_index=True, use_container_width=True)
+            elif not setting_on("glock_wildcards"):
+                st.info(
+                    ":material/lock: Everyone's wildcard picks unlock once the organiser locks "
+                    "wildcard predictions. Yours are under **My predictions**."
+                )
             else:
                 wq = [
                     (w["wildcard_id"], w["question"])
@@ -1481,7 +1532,7 @@ elif page == "🗳️ See predictions":
 # MATCHES & RESULTS  (per group, tile filter + standings)
 # =========================================================================== #
 elif page == "📅 Matches & results":
-    st.header("📅 Matches & results")
+    st.header(":material/calendar_month: Matches & results")
     g = group_tile_picker("mr_grp")
     names = {
         r["team_id"]: r["name"] for r in conn.execute("SELECT team_id, name FROM teams")
@@ -1543,9 +1594,10 @@ elif page == "📅 Matches & results":
                     "Away": m["away_label"],
                 }
             )
-        st.dataframe(
-            krows, hide_index=True, use_container_width=True
-        ) if krows else st.caption("No knockout results entered yet.")
+        if krows:
+            st.dataframe(krows, hide_index=True, use_container_width=True)
+        else:
+            st.caption("No knockout results entered yet.")
 
 # =========================================================================== #
 # LEADERBOARD
@@ -1567,7 +1619,11 @@ elif page == "📊 Leaderboard":
         top = rows[:3]
         order = [1, 0, 2]  # render 2nd, 1st, 3rd for podium effect
         html = ['<div class="podium-wrap">']
-        crowns = {0: "👑", 1: "🥈", 2: "🥉"}
+        crowns = {
+            0: "👑",
+            1: '<span class="nicon">military_tech</span>',
+            2: '<span class="nicon">workspace_premium</span>',
+        }
         for slot in order:
             if slot >= len(top):
                 continue
@@ -1628,7 +1684,7 @@ elif page == "📊 Leaderboard":
 # ADMIN
 # =========================================================================== #
 elif page == "🔐 Admin":
-    st.header("🔐 Admin")
+    st.header(":material/admin_panel_settings: Admin")
     if not ADMIN_PASSWORD:
         st.error(
             "Admin is not configured. Set an **ADMIN_PASSWORD** secret "
@@ -1648,12 +1704,14 @@ elif page == "🔐 Admin":
     st.success("Admin unlocked.")
 
     admin_view = tile_toggle(
-        "admin_section", ["📝 Match scores", "⚙️ Settings & users"])
+        "admin_section", ["📝 Match scores", "⚙️ Settings & users"],
+        labels=[":material/scoreboard: Match scores",
+                ":material/settings: Settings & users"])
     st.divider()
 
     # ---- subpage: register match scores (filtered, loads on selection) ----
     if admin_view == "📝 Match scores":
-        st.subheader("📝 Register match scores")
+        st.subheader(":material/scoreboard: Register match scores")
         st.caption("Pick a stage, then a group or knockout round to load its "
                    "matches.")
         kind = st.radio("Stage", ["Group stage", "Knockout"], horizontal=True,
@@ -1699,7 +1757,7 @@ elif page == "🔐 Admin":
                         "A", 0, 30, value=cur["away_goals"] if cur else 0,
                         key=f"ara_{m['match_id']}", label_visibility="collapsed")
                     entries.append((m["match_id"], hg, ag))
-                if st.form_submit_button("💾 Save results", type="primary") and entries:
+                if st.form_submit_button(":material/save: Save results", type="primary") and entries:
                     for mid, hg, ag in entries:
                         upsert(conn, "match_results", {
                             "match_id": mid, "home_goals": int(hg),
@@ -1731,13 +1789,13 @@ elif page == "🔐 Admin":
 
     lc1, lc2 = st.columns(2)
     ko_cur = dbmod.knockout_pred_locked(conn)
-    ko_new = lc1.toggle("🔒 Lock knockout predictions", value=ko_cur, key="glock_ko")
+    ko_new = lc1.toggle(":material/lock: Lock knockout predictions", value=ko_cur, key="glock_ko")
     if ko_new != ko_cur:
         dbmod.set_knockout_pred_locked(conn, ko_new)
         cx_clear_settings()
         st.rerun()
     wc_cur = dbmod.wildcards_pred_locked(conn)
-    wc_new = lc2.toggle("🔒 Lock wildcard predictions", value=wc_cur, key="glock_wc")
+    wc_new = lc2.toggle(":material/lock: Lock wildcard predictions", value=wc_cur, key="glock_wc")
     if wc_new != wc_cur:
         dbmod.set_wildcards_pred_locked(conn, wc_new)
         cx_clear_settings()
@@ -1772,7 +1830,7 @@ elif page == "🔐 Admin":
                 st.success("Wildcard results saved.")
 
     st.divider()
-    st.subheader("👥 Manage users")
+    st.subheader(":material/group: Manage users")
     users = list(conn.execute("SELECT * FROM participants ORDER BY name"))
     if not users:
         st.caption("No players yet.")
@@ -1811,7 +1869,7 @@ elif page == "🔐 Admin":
                     else 0,
                     horizontal=True,
                 )
-                if st.form_submit_button("💾 Save changes", type="primary"):
+                if st.form_submit_button(":material/save: Save changes", type="primary"):
                     try:
                         if new_name.strip() and new_name.strip() != u["name"]:
                             dbmod.rename_participant(conn, upid, new_name.strip())
@@ -1844,7 +1902,7 @@ elif page == "🔐 Admin":
             "Reopen specific groups (lets the player edit & re-submit them)",
             sub_groups, key="mu_reopen_g")
         ru1, ru2 = st.columns(2)
-        if ru1.button("🔓 Reopen selected groups", disabled=not reopen,
+        if ru1.button(":material/lock_open: Reopen selected groups", disabled=not reopen,
                       use_container_width=True, key="mu_reopen_btn"):
             for g in reopen:
                 dbmod.unlock_scope(conn, upid, f"group:{g}")
@@ -1852,7 +1910,7 @@ elif page == "🔐 Admin":
             cx_clear_scores()
             st.success(f"Reopened groups {', '.join(reopen)} for {who}.")
             st.rerun()
-        if ru2.button("🔓 Reopen ALL predictions", use_container_width=True,
+        if ru2.button(":material/lock_open: Reopen ALL predictions", use_container_width=True,
                       key="mu_unlock_all"):
             conn.execute("DELETE FROM pred_locks WHERE participant_id=?", (upid,))
             cx_clear_scores()
@@ -1863,19 +1921,20 @@ elif page == "🔐 Admin":
         st.markdown("**Reset actions**")
         rc1, rc2 = st.columns(2)
         with rc1:
-            if st.button("♻️ Reset profile to defaults", use_container_width=True):
+            if st.button(":material/restart_alt: Reset profile to defaults",
+                         use_container_width=True):
                 dbmod.reset_profile(conn, upid)
                 st.success(f"Profile reset for {who} (predictions kept).")
                 st.rerun()
         with rc2:
-            with st.popover("🔑 Reset PIN", use_container_width=True):
+            with st.popover(":material/key: Reset PIN", use_container_width=True):
                 newpin = st.text_input("New PIN", type="password", key="mu_pin")
                 if st.button("Set new PIN") and newpin:
                     dbmod.set_pin(conn, upid, newpin)
                     st.success(f"PIN reset for {who}.")
 
     st.divider()
-    if st.button("🔄 Refresh dashboards (HTML + Power BI tables + CSV)"):
+    if st.button(":material/refresh: Refresh dashboards (HTML + Power BI tables + CSV)"):
         export.export_csvs(conn)
         export.export_dashboard_json(conn)
         # publish scored tables (vw_leaderboard, ...) into the database so
@@ -1936,7 +1995,7 @@ elif page == "🔐 Admin":
         st.success("Backup ready — click below to download.")
     if st.session_state.get("_backup_zip"):
         st.download_button(
-            "⬇️ Download backup ZIP",
+            ":material/download: Download backup ZIP",
             data=st.session_state["_backup_zip"],
             file_name="wc2026_backup.zip",
             mime="application/zip",
