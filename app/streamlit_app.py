@@ -1769,53 +1769,50 @@ elif page == "🔐 Admin":
                 ms = conn.execute(
                     "SELECT * FROM matches WHERE stage=? AND is_knockout=1 "
                     "ORDER BY match_id", (cval,)).fetchall()
-            st.caption("Leave a match **blank** if it hasn't been played yet — "
-                       "only matches with both boxes filled are saved (enter 0 and "
-                       "0 for a real goalless draw). Clearing a saved match removes "
-                       "its result.")
+            st.caption("Tick **Played** for matches that have a result; untick and "
+                       "Save to remove one entered by mistake. 0–0 is a real "
+                       "result — keep it ticked.")
             with st.form(f"adm_results_{ckind}_{cval}"):
+                h0, h1, h2, h3 = st.columns([0.8, 3.2, 1, 1])
+                h0.caption("Played")
+                h1.caption("Match")
+                h2.caption("H")
+                h3.caption("A")
                 entries = []
                 for m in ms:
                     cur = conn.execute(
                         "SELECT * FROM match_results WHERE match_id=?",
                         (m["match_id"],)).fetchone()
-                    c1, c2, c3 = st.columns([4, 1, 1])
+                    c0, c1, c2, c3 = st.columns([0.8, 3.2, 1, 1])
+                    played = c0.checkbox(
+                        "Played", value=cur is not None,
+                        key=f"play_{m['match_id']}", label_visibility="collapsed")
                     c1.markdown(
                         f"`{m['match_id']}` {m['home_label']} vs {m['away_label']}")
                     hg = c2.number_input(
-                        "H", min_value=0, max_value=30,
-                        value=cur["home_goals"] if cur else None,
-                        key=f"arh_{m['match_id']}", label_visibility="collapsed",
-                        placeholder="–")
+                        "H", 0, 30, value=cur["home_goals"] if cur else 0,
+                        key=f"arh_{m['match_id']}", label_visibility="collapsed")
                     ag = c3.number_input(
-                        "A", min_value=0, max_value=30,
-                        value=cur["away_goals"] if cur else None,
-                        key=f"ara_{m['match_id']}", label_visibility="collapsed",
-                        placeholder="–")
-                    entries.append((m["match_id"], hg, ag, cur is not None))
+                        "A", 0, 30, value=cur["away_goals"] if cur else 0,
+                        key=f"ara_{m['match_id']}", label_visibility="collapsed")
+                    entries.append((m["match_id"], played, hg, ag, cur is not None))
                 if st.form_submit_button(":material/save: Save results", type="primary"):
-                    saved = removed = skipped = 0
-                    for mid, hg, ag, had in entries:
-                        if hg is None and ag is None:
-                            if had:                       # cleared a saved result
-                                conn.execute(
-                                    "DELETE FROM match_results WHERE match_id=?", (mid,))
-                                removed += 1
-                            continue                      # blank = not played
-                        if hg is None or ag is None:
-                            skipped += 1                  # only one box filled
-                            continue
-                        upsert(conn, "match_results", {
-                            "match_id": mid, "home_goals": int(hg),
-                            "away_goals": int(ag), "advance": None,
-                        }, ["match_id"])
-                        saved += 1
+                    saved = removed = 0
+                    for mid, played, hg, ag, had in entries:
+                        if played:
+                            upsert(conn, "match_results", {
+                                "match_id": mid, "home_goals": int(hg),
+                                "away_goals": int(ag), "advance": None,
+                            }, ["match_id"])
+                            saved += 1
+                        elif had:                         # unticked a saved result
+                            conn.execute(
+                                "DELETE FROM match_results WHERE match_id=?", (mid,))
+                            removed += 1
                     cx_clear_scores()
                     msg = f"Saved {saved} result(s)"
                     if removed:
                         msg += f", removed {removed}"
-                    if skipped:
-                        msg += f" · {skipped} skipped (only one score entered)"
                     st.success(msg + f" for {cval}.")
         st.stop()
 
