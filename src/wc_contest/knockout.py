@@ -119,16 +119,23 @@ def resolve_bracket(conn, pid) -> dict[str, dict]:
         "SELECT * FROM match_predictions WHERE participant_id=?", (pid,))}
 
     standings, best8_groups, complete = qualifiers(conn, pid)
+    return _resolve_from(conn, names, preds, standings, best8_groups, complete)
+
+
+def _resolve_from(conn, names, preds, standings, best8_groups, complete):
+    """Shared bracket resolver. `preds` maps ko_id -> object with
+    pred_home/pred_away/pred_advance (a participant's picks, OR the actual
+    results shaped the same way). `standings` is {group: [rows best-first]}."""
+    bracket = load_bracket()
     alloc = bracket["third_alloc"].get("".join(best8_groups)) if complete else None
 
     def pos_team(kind, group):
-        """team_id for a group position, or None if not derivable yet."""
         rows = standings.get(group, [])
         if kind == "w":
             return rows[0]["team_id"] if len(rows) >= 1 else None
         if kind == "r":
             return rows[1]["team_id"] if len(rows) >= 2 else None
-        if kind == "t":            # third placed allocated to winner-column `group`
+        if kind == "t":
             if not alloc:
                 return None
             src = alloc.get(group)
@@ -163,7 +170,7 @@ def resolve_bracket(conn, pid) -> dict[str, dict]:
         adv = p["pred_advance"]
         if adv in (h, a):
             return adv, (a if adv == h else h)
-        return None, None          # level score, no advance pick yet
+        return None, None
 
     for num in range(73, 105):
         ko_id = ko_id_map[str(num)]
@@ -203,3 +210,68 @@ def resolve_bracket(conn, pid) -> dict[str, dict]:
         resolved[num]["loser_id"] = l
 
     return {slot["ko_id"]: slot for slot in resolved.values()}
+
+
+# --------------------------------------------------------------------------- #
+# ACTUAL bracket — the real fixtures everyone predicts, derived from the
+# real GROUP RESULTS + real KO RESULTS (match_results), not from any player's
+# predictions. Used by the "Actual knockout" feature / admin auto-fill.
+# --------------------------------------------------------------------------- #
+def actual_group_standings(conn) -> dict[str, list[dict]]:
+    """Group standings from real match_results (group games only)."""
+    teams = {r["team_id"]: dict(team_id=r["team_id"], name=r["name"],
+                                group=r["group_code"])
+             for r in conn.execute("SELECT team_id, name, group_code FROM teams")}
+    tbl: dict[str, dict] = {}
+    for tid, t in teams.items():
+        if t["group"]:
+            tbl.setdefault(t["group"], {})[tid] = dict(
+                team_id=tid, name=t["name"], group=t["group"],
+                P=0, W=0, D=0, L=0, GF=0, GA=0, GD=0, Pts=0)
+    results = {r["match_id"]: r for r in conn.execute("SELECT * FROM match_results")}
+    for m in conn.execute(
+            "SELECT match_id, group_code, home_team_id, away_team_id "
+            "FROM matches WHERE is_knockout=0"):
+        r = results.get(m["match_id"])
+        if not r:
+            continue
+        g = m["group_code"]
+        hrow = tbl.get(g, {}).get(m["home_team_id"])
+        arow = tbl.get(g, {}).get(m["away_team_id"])
+        if hrow is None or arow is None:
+            continue
+        hg, ag = int(r["home_goals"]), int(r["away_goals"])
+        for row, gf, ga in ((hrow, hg, ag), (arow, ag, hg)):
+            row["P"] += 1
+            row["GF"] += gf
+            row["GA"] += ga
+            row["GD"] = row["GF"] - row["GA"]
+        if hg > ag:
+            hrow["W"] += 1; hrow["Pts"] += 3; arow["L"] += 1
+        elif hg < ag:
+            arow["W"] += 1; arow["Pts"] += 3; hrow["L"] += 1
+        else:
+            hrow["D"] += 1; arow["D"] += 1; hrow["Pts"] += 1; arow["Pts"] += 1
+    return {g: sorted(rows.values(), key=_rank_key) for g, rows in tbl.items()}
+
+
+def actual_bracket(conn) -> dict[str, dict]:
+    """Resolve the REAL bracket from actual results. R32 from real group
+    standings; later rounds from real KO results (match_results) + the
+    'advance' column. Returns {ko_id: slot} like resolve_bracket."""
+    names = {r["team_id"]: r["name"]
+             for r in conn.execute("SELECT team_id, name FROM teams")}
+    standings = actual_group_standings(conn)
+    # shape real KO results as a preds-like map keyed by ko_id
+    preds = {}
+    for r in conn.execute("SELECT * FROM match_results"):
+        preds[r["match_id"]] = {
+            "pred_home": r["home_goals"], "pred_away": r["away_goals"],
+            "pred_advance": r["advance"],
+        }
+    complete = all(
+        sum(row["P"] for row in standings.get(g, [])) >= 12  # 4 teams x 3 games
+        for g in GROUP_CODES)
+    thirds = [standings[g][2] for g in GROUP_CODES if len(standings.get(g, [])) >= 3]
+    best8_groups = sorted(t["group"] for t in sorted(thirds, key=_rank_key)[:8])
+    return _resolve_from(conn, names, preds, standings, best8_groups, complete)

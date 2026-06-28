@@ -791,9 +791,10 @@ page = render_top_nav()
 if page == "🎯 Make predictions":
     with st.container(key="mk_toggle"):
         page = tile_toggle(
-            "mk_view", ["🎯 Match picks", "🃏 Wildcards"],
+            "mk_view", ["🎯 Match picks", "🃏 Wildcards", "🏆 Actual KO"],
             labels=[":material/sports_soccer: Match picks",
-                    ":material/casino: Wildcards"])
+                    ":material/casino: Wildcards",
+                    ":material/trophy: Actual KO"])
 
 # =========================================================================== #
 # HOME
@@ -1059,11 +1060,10 @@ elif page == "🎯 Match picks":
                            "(saved as drafts). Review, then Submit each stage.")
                 st.rerun()
 
-        with st.container(key="mp_toggle"):
-            view = tile_toggle(
-                "mp_view", ["Group stage", "Knockout"],
-                labels=[":material/groups: Group stage",
-                        ":material/emoji_events: Knockout"])
+        # Knockout is now predicted on the dedicated "Actual KO" tab (the real
+        # fixtures). The group-derived knockout view below is retained in code
+        # but no longer shown — Match picks is the group stage only.
+        view = "Group stage"
 
         # ------------------------------------------------------------------- #
         if view == "Group stage":
@@ -1422,6 +1422,75 @@ elif page == "🃏 Wildcards":
                             ["participant_id", "wildcard_id"],
                         )
                 st.success("Wildcards locked in! 🃏")
+
+# =========================================================================== #
+# ACTUAL KNOCKOUT — real fixtures everyone predicts (same matchups for all)
+# =========================================================================== #
+elif page == "🏆 Actual KO":
+    st.header(":material/trophy: Actual knockout")
+    st.caption("Predict the REAL knockout fixtures — the same matchups for "
+               "everyone. Separate from your group-derived bracket, and scored "
+               "like every other match (exact 5 / goal-diff 3 / result 2, +1 for "
+               "the right team to advance on a draw).")
+    if not logged_in():
+        need_login()
+    else:
+        pid = ss().pid
+        ako_locked = dbmod.actual_ko_locked(conn)
+        if ako_locked:
+            st.markdown(
+                '<div class="lock-banner lock-on"><span class="nicon">lock</span> '
+                "Actual-knockout predictions are locked.</div>",
+                unsafe_allow_html=True)
+        fixtures = list(conn.execute(
+            "SELECT * FROM matches WHERE is_knockout=1 AND home_team_id IS NOT NULL "
+            "AND away_team_id IS NOT NULL ORDER BY kickoff_utc, match_id"))
+        if not fixtures:
+            st.info("No actual knockout fixtures yet — they appear once the "
+                    "organiser publishes the real bracket (after the group stage).")
+        else:
+            ex = {r["match_id"]: r for r in conn.execute(
+                "SELECT * FROM actual_ko_predictions WHERE participant_id=?", (pid,))}
+            with st.form("akoform"):
+                picks = []
+                cur_stage = None
+                for m in fixtures:
+                    if m["stage"] != cur_stage:
+                        st.markdown(f"**{m['stage']}**")
+                        cur_stage = m["stage"]
+                    e = ex.get(m["match_id"])
+                    c1, c2, c3, c4 = st.columns([3, 1, 1, 3])
+                    c1.markdown(f"**{m['home_label']}**")
+                    hv = c2.number_input(
+                        "H", 0, 30, value=e["pred_home"] if e else 0,
+                        key=f"akh_{m['match_id']}", disabled=ako_locked,
+                        label_visibility="collapsed")
+                    av = c3.number_input(
+                        "A", 0, 30, value=e["pred_away"] if e else 0,
+                        key=f"aka_{m['match_id']}", disabled=ako_locked,
+                        label_visibility="collapsed")
+                    c4.markdown(f"**{m['away_label']}**")
+                    adv_opts = ["", m["home_label"], m["away_label"]]
+                    cur_adv = e["pred_advance"] if e else None
+                    cur_lbl = (m["home_label"] if cur_adv == m["home_team_id"]
+                               else m["away_label"] if cur_adv == m["away_team_id"]
+                               else "")
+                    adv = st.selectbox(
+                        f"If level after 90', who advances? ({m['home_label']} v {m['away_label']})",
+                        adv_opts, index=adv_opts.index(cur_lbl) if cur_lbl in adv_opts else 0,
+                        key=f"akadv_{m['match_id']}", disabled=ako_locked)
+                    picks.append((m["match_id"], hv, av, adv, m["home_team_id"],
+                                  m["away_team_id"], m["home_label"], m["away_label"]))
+                if st.form_submit_button(":material/lock: Lock in actual-KO picks",
+                                         type="primary", disabled=ako_locked):
+                    for mid, hv, av, adv, hid, aid, hl, al in picks:
+                        adv_id = hid if adv == hl else (aid if adv == al else None)
+                        upsert(conn, "actual_ko_predictions", {
+                            "participant_id": pid, "match_id": mid,
+                            "pred_home": int(hv), "pred_away": int(av),
+                            "pred_advance": adv_id, "submitted_at": dbmod.now_iso(),
+                        }, ["participant_id", "match_id"])
+                    st.success("Actual-knockout picks saved! 🏆")
 
 # =========================================================================== #
 # PREDICTIONS  (own anytime; everyone's only after the lock)
@@ -1858,6 +1927,59 @@ elif page == "🔐 Admin":
         dbmod.set_wildcards_pred_locked(conn, wc_new)
         cx_clear_settings()
         st.rerun()
+
+    # ---- actual knockout (real fixtures everyone predicts) ----
+    st.divider()
+    st.subheader(":material/trophy: Actual knockout fixtures")
+    n_set = conn.execute(
+        "SELECT COUNT(*) FROM matches WHERE is_knockout=1 AND home_team_id IS NOT NULL "
+        "AND away_team_id IS NOT NULL").fetchone()[0]
+    st.caption(f"Real fixtures everyone predicts (separate from the derived "
+               f"bracket). {n_set} fixture(s) have real teams set so far.")
+    ak1, ak2 = st.columns(2)
+    if ak1.button(":material/auto_fix_high: Auto-fill from group results",
+                  use_container_width=True):
+        n = dbmod.autofill_actual_ko(conn)
+        cx_clear_settings()
+        st.success(f"Set real teams on {n} knockout fixture(s) from the entered "
+                   "group results. (Re-run after each round's results are in.)")
+        st.rerun()
+    ako_cur = dbmod.actual_ko_locked(conn)
+    ako_new = ak2.toggle(":material/lock: Lock actual-KO predictions",
+                         value=ako_cur, key="glock_ako")
+    if ako_new != ako_cur:
+        dbmod.set_actual_ko_locked(conn, ako_new)
+        cx_clear_settings()
+        st.rerun()
+    with st.expander("Set / correct a fixture's teams manually"):
+        tnames = [""] + team_options()
+        name2id = {r["name"]: r["team_id"]
+                   for r in conn.execute("SELECT team_id, name FROM teams")}
+        id2name = {v: k for k, v in name2id.items()}
+        kos = list(conn.execute(
+            "SELECT * FROM matches WHERE is_knockout=1 ORDER BY kickoff_utc, match_id"))
+        with st.form("ako_setfix"):
+            edits = []
+            for m in kos:
+                c1, c2, c3 = st.columns([2, 2, 2])
+                c1.markdown(f"`{m['stage']}`")
+                ch = id2name.get(m["home_team_id"], "")
+                ca = id2name.get(m["away_team_id"], "")
+                h = c2.selectbox("Home", tnames,
+                                 index=tnames.index(ch) if ch in tnames else 0,
+                                 key=f"akoh_{m['match_id']}", label_visibility="collapsed")
+                a = c3.selectbox("Away", tnames,
+                                 index=tnames.index(ca) if ca in tnames else 0,
+                                 key=f"akoa_{m['match_id']}", label_visibility="collapsed")
+                edits.append((m["match_id"], h, a))
+            if st.form_submit_button("Save fixtures"):
+                cnt = 0
+                for mid, h, a in edits:
+                    if h and a:
+                        dbmod.set_actual_ko_teams(conn, mid, name2id[h], name2id[a])
+                        cnt += 1
+                cx_clear_settings()
+                st.success(f"Saved {cnt} fixture(s).")
 
     # ---- submission stats ----
     st.divider()

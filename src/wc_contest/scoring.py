@@ -105,6 +105,7 @@ def compute_scores(conn: sqlite3.Connection) -> list[ParticipantScore]:
             participant_id=row["participant_id"], name=row["name"])
 
     _score_matches(conn, scores)
+    _score_actual_ko(conn, scores)
     _score_wildcards(conn, scores)
     _track_submission_times(conn, scores)
 
@@ -155,6 +156,9 @@ def _score_matches(conn, scores) -> None:
         m = meta.get(p["match_id"])
         if m is None:
             continue
+        if m["is_knockout"]:
+            continue            # derived knockout kept for display but NOT scored;
+            #                     only the 'actual knockout' predictions score (below)
         if not prediction_submitted(locks.get(p["participant_id"], set()), m):
             continue                         # only submitted predictions score
         pts, exact = score_match(
@@ -167,6 +171,34 @@ def _score_matches(conn, scores) -> None:
             continue
         s.match_points += pts
         s.per_match[p["match_id"]] = pts
+        if exact:
+            s.exact_score_hits += 1
+
+
+def _score_actual_ko(conn, scores) -> None:
+    """Score the ACTUAL-knockout predictions (real fixtures everyone predicts)
+    against the real KO results, same scoreline rules; folded into match_points."""
+    results = {r["match_id"]: r for r in conn.execute("SELECT * FROM match_results")}
+    if not results:
+        return
+    try:
+        rows = list(conn.execute("SELECT * FROM actual_ko_predictions"))
+    except Exception:
+        return
+    for p in rows:
+        res = results.get(p["match_id"])
+        if res is None:
+            continue
+        pts, exact = score_match(
+            p["pred_home"], p["pred_away"],
+            res["home_goals"], res["away_goals"],
+            p["pred_advance"], res["advance"],
+        )
+        s = scores.get(p["participant_id"])
+        if s is None:
+            continue
+        s.match_points += pts
+        s.per_match[f"AKO:{p['match_id']}"] = pts
         if exact:
             s.exact_score_hits += 1
 

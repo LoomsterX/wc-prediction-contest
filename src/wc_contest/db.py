@@ -175,6 +175,41 @@ def any_stage_locked(conn) -> bool:
 
 
 # --------------------------------------------------------------------------- #
+# ACTUAL knockout (real fixtures everyone predicts) — separate global lock +
+# helpers to assign the real teams to knockout `matches` rows. Does NOT affect
+# the per-player derived bracket (which ignores matches' KO team ids).
+# --------------------------------------------------------------------------- #
+def actual_ko_locked(conn) -> bool:
+    return get_setting(conn, "glock_actual_ko", "0") == "1"
+
+
+def set_actual_ko_locked(conn, locked: bool) -> None:
+    set_setting(conn, "glock_actual_ko", "1" if locked else "0")
+
+
+def set_actual_ko_teams(conn, match_id, home_team_id, away_team_id) -> None:
+    names = {r["team_id"]: r["name"]
+             for r in conn.execute("SELECT team_id, name FROM teams")}
+    conn.execute(
+        "UPDATE matches SET home_team_id=?, away_team_id=?, home_label=?, "
+        "away_label=? WHERE match_id=? AND is_knockout=1",
+        (home_team_id, away_team_id, names.get(home_team_id),
+         names.get(away_team_id), match_id))
+
+
+def autofill_actual_ko(conn) -> int:
+    """Populate real teams on knockout `matches` rows from the results-derived
+    bracket. Returns how many fixtures now have both teams known."""
+    from . import knockout
+    n = 0
+    for ko_id, slot in knockout.actual_bracket(conn).items():
+        if slot["home_id"] and slot["away_id"]:
+            set_actual_ko_teams(conn, ko_id, slot["home_id"], slot["away_id"])
+            n += 1
+    return n
+
+
+# --------------------------------------------------------------------------- #
 # Wildcard sync: keep the live `wildcards` table in step with seed_data so that
 # question text / type / options / new questions update on existing databases
 # (not just freshly-seeded ones).

@@ -140,6 +140,20 @@ pred_locks = sa.Table(
     sa.Column("locked_at", sa.Text, nullable=False),
 )
 
+# --- ACTUAL knockout: everyone predicts the SAME real fixtures (the real R32+
+# bracket), separate from the per-player derived bracket. Real teams live on the
+# knockout rows of `matches` (home_team_id/away_team_id); real results reuse
+# match_results. This table just holds each player's scoreline pick. --- #
+actual_ko_predictions = sa.Table(
+    "actual_ko_predictions", metadata,
+    sa.Column("participant_id", sa.Integer, primary_key=True),
+    sa.Column("match_id", sa.Text, primary_key=True),     # KO_* id in matches
+    sa.Column("pred_home", sa.Integer, nullable=False),
+    sa.Column("pred_away", sa.Integer, nullable=False),
+    sa.Column("pred_advance", sa.Integer),                # team_id for draws
+    sa.Column("submitted_at", sa.Text, nullable=False),
+)
+
 
 # --------------------------------------------------------------------------- #
 # Row / Result wrappers (preserve row["col"] AND row[0] access)
