@@ -791,10 +791,9 @@ page = render_top_nav()
 if page == "🎯 Make predictions":
     with st.container(key="mk_toggle"):
         page = tile_toggle(
-            "mk_view", ["🎯 Match picks", "🃏 Wildcards", "🏆 Actual KO"],
+            "mk_view", ["🎯 Match picks", "🃏 Wildcards"],
             labels=[":material/sports_soccer: Match picks",
-                    ":material/casino: Wildcards",
-                    ":material/trophy: Actual KO"])
+                    ":material/casino: Wildcards"])
 
 # =========================================================================== #
 # HOME
@@ -1060,10 +1059,11 @@ elif page == "🎯 Match picks":
                            "(saved as drafts). Review, then Submit each stage.")
                 st.rerun()
 
-        # Knockout is now predicted on the dedicated "Actual KO" tab (the real
-        # fixtures). The group-derived knockout view below is retained in code
-        # but no longer shown — Match picks is the group stage only.
-        view = "Group stage"
+        with st.container(key="mp_toggle"):
+            view = tile_toggle(
+                "mp_view", ["Group stage", "Knockout"],
+                labels=[":material/groups: Group stage",
+                        ":material/emoji_events: Knockout"])
 
         # ------------------------------------------------------------------- #
         if view == "Group stage":
@@ -1193,156 +1193,92 @@ elif page == "🎯 Match picks":
                     )
 
         # ------------------------------------------------------------------- #
-        else:  # Knockout — functional entry; centered bracket layout is TBD
-            if not groups_done:
-                missing = [g for g in dbmod.GROUP_CODES if f"group:{g}" not in scopes]
-                st.info(
-                    ":material/lock: Knockout predictions unlock once you've locked in **all 12 "
-                    "groups**. Still to lock in: "
-                    + ", ".join(f"Group {g}" for g in missing)
-                )
+        else:  # Knockout — predict the ACTUAL published fixtures (same for all)
+            ako_locked = dbmod.actual_ko_locked(conn)
+            SHORT = {"Round of 32": "R32", "Round of 16": "R16",
+                     "Quarter-final": "QF", "Semi-final": "SF",
+                     "Third place": "3rd", "Final": "Final"}
+            ko_rows = list(conn.execute(
+                "SELECT * FROM matches WHERE is_knockout=1 "
+                "AND home_team_id IS NOT NULL AND away_team_id IS NOT NULL "
+                "ORDER BY kickoff_utc, match_id"))
+            if not ko_rows:
+                st.info(":material/lock: Knockout fixtures aren't published yet — "
+                        "they appear once the group stage is done and the organiser "
+                        "publishes the real bracket.")
             else:
-                can_edit = knockout_editable(pid)
-                if setting_on("glock_knockout"):
-                    st.info(":material/lock: Knockout predictions are closed by the organiser — "
-                            "viewing only.")
-                elif submitted_final:
-                    st.caption("Your predictions are submitted — ask an admin to "
-                               "unlock to edit.")
-
-                # Derived bracket — recomputed only on rerun (i.e. after Save/Submit),
-                # so the next round's match-ups refresh exactly then, not while typing.
-                bracket = knockout.resolve_bracket(conn, pid)
-
-                SHORT = {"Round of 32": "R32", "Round of 16": "R16",
-                         "Quarter-final": "QF", "Semi-final": "SF",
-                         "Third place": "3rd", "Final": "Final"}
-                ss().setdefault("sel_ko", ko_stages[0])
-                if ss().sel_ko not in ko_stages:
-                    ss().sel_ko = ko_stages[0]
-
-                # ---- final submit (shown above the round filter) ----
-                if ko_done and not submitted_final and can_edit:
-                    st.markdown("**All groups and knockout rounds are submitted.**")
-                    st.caption("Submitting freezes ALL your picks. An admin can "
-                               "unlock you afterwards if you need changes.")
-                    if st.button(":material/check_circle: Submit predictions (final)",
-                                 type="primary"):
-                        dbmod.lock_scope(conn, pid, "final")
-                        conn.commit()
-                        cx_clear_scores()
-                        ss().balloons_done = False
-                        st.success("Predictions submitted and locked! 🎉")
-                        st.rerun()
-                elif not ko_done and not submitted_final:
-                    remaining = [SHORT.get(s, s) for s in ko_stages
-                                 if f"ko:{s}" not in scopes]
-                    st.caption("Submit every knockout round to enable the final "
-                               "**Submit predictions** button. Remaining: "
-                               + ", ".join(remaining))
-                st.divider()
-
-                # green tiles for submitted rounds
-                sub_idx = [i for i, s in enumerate(ko_stages) if f"ko:{s}" in scopes]
-                if sub_idx:
-                    css = "".join(
-                        f".st-key-kobtn_{i} button{{background:#0f7b3f !important;"
-                        f"border-color:#28e07a !important;color:#eafff2 !important;"
-                        f"box-shadow:0 0 12px rgba(40,224,122,.5) !important;}}"
-                        for i in sub_idx)
-                    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
-
-                st.write("**Pick a round:**  ·  🟢 = submitted")
-                kcols = st.columns(len(ko_stages))
-                for i, s in enumerate(ko_stages):
-                    label = SHORT.get(s, s) + (" ✓" if f"ko:{s}" in scopes else "")
+                if ako_locked:
+                    st.info(":material/lock: Knockout predictions are closed by the "
+                            "organiser — viewing only.")
+                stages_avail = [s for s in ko_stages if any(m["stage"] == s for m in ko_rows)]
+                ss().setdefault("sel_ko", stages_avail[0])
+                if ss().sel_ko not in stages_avail:
+                    ss().sel_ko = stages_avail[0]
+                st.write("**Pick a round:**")
+                kcols = st.columns(len(stages_avail))
+                for i, s in enumerate(stages_avail):
                     btype = "primary" if ss().sel_ko == s else "secondary"
-                    if kcols[i].button(label, key=f"kobtn_{i}", type=btype,
-                                       use_container_width=True):
+                    if kcols[i].button(SHORT.get(s, s), key=f"kobtn_{i}",
+                                       type=btype, use_container_width=True):
                         ss().sel_ko = s
                         st.rerun()
 
                 stage = ss().sel_ko
-                stage_submitted = f"ko:{stage}" in scopes
-                st.subheader(stage + ("  🟢 submitted" if stage_submitted else ""))
-                if stage_submitted and not submitted_final and not setting_on("glock_knockout"):
-                    st.info(f"🟢 {stage} is submitted and locked — it counts for "
-                            "points. Ask an admin to unlock to change.")
-                elif not setting_on("glock_knockout") and not submitted_final:
-                    st.caption("Match-ups derive from your earlier rounds. **Save** "
-                               "updates the next round's match-ups; **Submit** locks "
-                               "this round for points.")
-
-                stage_matches = [m for m in cx_matches()
-                                 if m["is_knockout"] and m["stage"] == stage]
+                st.subheader(stage)
+                ex = {r["match_id"]: r for r in conn.execute(
+                    "SELECT * FROM actual_ko_predictions WHERE participant_id=?", (pid,))}
+                stage_matches = [m for m in ko_rows if m["stage"] == stage]
                 stage_matches.sort(
                     key=lambda mm: int(str(mm["match_id"]).rsplit("_", 1)[-1]))
 
                 picks = []
                 with st.form(f"koform_{stage}"):
-                    fc1, fc2 = st.columns(2)
-                    with fc1:
-                        k_save = st.form_submit_button(
-                            ":material/save: Save", disabled=not can_edit,
-                            use_container_width=True)
-                    with fc2:
-                        k_submit = st.form_submit_button(
-                            f":material/lock: Submit {SHORT.get(stage, stage)}",
-                            type="primary",
-                            disabled=not can_edit, use_container_width=True)
+                    k_submit = st.form_submit_button(
+                        f":material/lock: Lock in {SHORT.get(stage, stage)} picks",
+                        type="primary", disabled=ako_locked,
+                        use_container_width=True)
                     ncol = 2 if len(stage_matches) > 1 else 1
                     cols = st.columns(ncol)
                     for i, m in enumerate(stage_matches):
                         with cols[i % ncol]:
                             mid = m["match_id"]
-                            slot = bracket.get(mid, {})
-                            home_id, away_id = slot.get("home_id"), slot.get("away_id")
-                            hl = slot.get("home_label", m["home_label"])
-                            al = slot.get("away_label", m["away_label"])
-                            ex = existing.get(mid)
-                            st.markdown(f"<div class='ko-team'>{hl}</div>",
+                            e = ex.get(mid)
+                            st.markdown(f"<div class='ko-team'>{m['home_label']}</div>",
                                         unsafe_allow_html=True)
                             hv = st.number_input(
-                                "H", 0, 30, value=ex["pred_home"] if ex else 0,
-                                key=f"h_{mid}", disabled=not can_edit,
+                                "H", 0, 30, value=e["pred_home"] if e else 0,
+                                key=f"akh_{mid}", disabled=ako_locked,
                                 label_visibility="collapsed")
-                            st.markdown(f"<div class='ko-team'>{al}</div>",
+                            st.markdown(f"<div class='ko-team'>{m['away_label']}</div>",
                                         unsafe_allow_html=True)
                             av = st.number_input(
-                                "A", 0, 30, value=ex["pred_away"] if ex else 0,
-                                key=f"a_{mid}", disabled=not can_edit,
+                                "A", 0, 30, value=e["pred_away"] if e else 0,
+                                key=f"aka_{mid}", disabled=ako_locked,
                                 label_visibility="collapsed")
-                            adv = None
-                            if home_id is not None and away_id is not None:
-                                opts = [home_id, away_id]
-                                cur = ex["pred_advance"] if ex else None
-                                idx = opts.index(cur) if cur in opts else 0
-                                adv = st.radio(
-                                    "Advances if level", opts, index=idx,
-                                    format_func=lambda t, h=home_id, mm=mid:
-                                        bracket[mm]["home_label" if t == h
-                                                    else "away_label"],
-                                    key=f"adv_{mid}", disabled=not can_edit,
-                                    horizontal=True)
+                            opts = [m["home_team_id"], m["away_team_id"]]
+                            cur = e["pred_advance"] if e else None
+                            idx = opts.index(cur) if cur in opts else 0
+                            adv = st.radio(
+                                "Advances if level", opts, index=idx,
+                                format_func=lambda t, h=m["home_team_id"],
+                                hl=m["home_label"], al=m["away_label"]:
+                                    hl if t == h else al,
+                                key=f"akadv_{mid}", disabled=ako_locked,
+                                horizontal=True)
                             picks.append((mid, hv, av, adv))
                             st.markdown("<div class='ko-gap'></div>",
                                         unsafe_allow_html=True)
-                if k_save or k_submit:
+                if k_submit:
                     for mid, hv, av, adv in picks:
-                        upsert(conn, "match_predictions", {
+                        upsert(conn, "actual_ko_predictions", {
                             "participant_id": pid, "match_id": mid,
                             "pred_home": int(hv), "pred_away": int(av),
                             "pred_advance": int(adv) if adv is not None else None,
                             "submitted_at": dbmod.now_iso(),
                         }, ["participant_id", "match_id"])
-                    if k_submit:
-                        dbmod.lock_scope(conn, pid, f"ko:{stage}")
-                        cx_clear_scores()
+                    cx_clear_scores()
                     conn.commit()
-                    st.success(
-                        f"{stage} submitted & locked! 🏆"
-                        if k_submit else
-                        f"{stage} saved — next round's match-ups updated.")
+                    st.success(f"{stage} picks locked in! 🏆")
                     st.rerun()
 
 # =========================================================================== #
@@ -1422,75 +1358,6 @@ elif page == "🃏 Wildcards":
                             ["participant_id", "wildcard_id"],
                         )
                 st.success("Wildcards locked in! 🃏")
-
-# =========================================================================== #
-# ACTUAL KNOCKOUT — real fixtures everyone predicts (same matchups for all)
-# =========================================================================== #
-elif page == "🏆 Actual KO":
-    st.header(":material/trophy: Actual knockout")
-    st.caption("Predict the REAL knockout fixtures — the same matchups for "
-               "everyone. Separate from your group-derived bracket, and scored "
-               "like every other match (exact 5 / goal-diff 3 / result 2, +1 for "
-               "the right team to advance on a draw).")
-    if not logged_in():
-        need_login()
-    else:
-        pid = ss().pid
-        ako_locked = dbmod.actual_ko_locked(conn)
-        if ako_locked:
-            st.markdown(
-                '<div class="lock-banner lock-on"><span class="nicon">lock</span> '
-                "Actual-knockout predictions are locked.</div>",
-                unsafe_allow_html=True)
-        fixtures = list(conn.execute(
-            "SELECT * FROM matches WHERE is_knockout=1 AND home_team_id IS NOT NULL "
-            "AND away_team_id IS NOT NULL ORDER BY kickoff_utc, match_id"))
-        if not fixtures:
-            st.info("No actual knockout fixtures yet — they appear once the "
-                    "organiser publishes the real bracket (after the group stage).")
-        else:
-            ex = {r["match_id"]: r for r in conn.execute(
-                "SELECT * FROM actual_ko_predictions WHERE participant_id=?", (pid,))}
-            with st.form("akoform"):
-                picks = []
-                cur_stage = None
-                for m in fixtures:
-                    if m["stage"] != cur_stage:
-                        st.markdown(f"**{m['stage']}**")
-                        cur_stage = m["stage"]
-                    e = ex.get(m["match_id"])
-                    c1, c2, c3, c4 = st.columns([3, 1, 1, 3])
-                    c1.markdown(f"**{m['home_label']}**")
-                    hv = c2.number_input(
-                        "H", 0, 30, value=e["pred_home"] if e else 0,
-                        key=f"akh_{m['match_id']}", disabled=ako_locked,
-                        label_visibility="collapsed")
-                    av = c3.number_input(
-                        "A", 0, 30, value=e["pred_away"] if e else 0,
-                        key=f"aka_{m['match_id']}", disabled=ako_locked,
-                        label_visibility="collapsed")
-                    c4.markdown(f"**{m['away_label']}**")
-                    adv_opts = ["", m["home_label"], m["away_label"]]
-                    cur_adv = e["pred_advance"] if e else None
-                    cur_lbl = (m["home_label"] if cur_adv == m["home_team_id"]
-                               else m["away_label"] if cur_adv == m["away_team_id"]
-                               else "")
-                    adv = st.selectbox(
-                        f"If level after 90', who advances? ({m['home_label']} v {m['away_label']})",
-                        adv_opts, index=adv_opts.index(cur_lbl) if cur_lbl in adv_opts else 0,
-                        key=f"akadv_{m['match_id']}", disabled=ako_locked)
-                    picks.append((m["match_id"], hv, av, adv, m["home_team_id"],
-                                  m["away_team_id"], m["home_label"], m["away_label"]))
-                if st.form_submit_button(":material/lock: Lock in actual-KO picks",
-                                         type="primary", disabled=ako_locked):
-                    for mid, hv, av, adv, hid, aid, hl, al in picks:
-                        adv_id = hid if adv == hl else (aid if adv == al else None)
-                        upsert(conn, "actual_ko_predictions", {
-                            "participant_id": pid, "match_id": mid,
-                            "pred_home": int(hv), "pred_away": int(av),
-                            "pred_advance": adv_id, "submitted_at": dbmod.now_iso(),
-                        }, ["participant_id", "match_id"])
-                    st.success("Actual-knockout picks saved! 🏆")
 
 # =========================================================================== #
 # PREDICTIONS  (own anytime; everyone's only after the lock)
