@@ -45,7 +45,7 @@ try:
 except Exception:
     pass
 
-from wc_contest import config, db as dbmod, scoring, export, avatar, knockout  # noqa: E402
+from wc_contest import config, db as dbmod, scoring, export, avatar, knockout, flags  # noqa: E402
 from wc_contest.engine import upsert  # noqa: E402
 
 # Admin password comes ONLY from Streamlit secrets or the ADMIN_PASSWORD env var
@@ -289,6 +289,18 @@ st.markdown(
       .st-key-nav_full > div[data-testid="stVerticalBlock"]{ display:none !important; }
       .st-key-nav_burger{ display:block !important; }
   }
+  /* ---- knockout match cards ---- */
+  .ko-head{ font-family:var(--tech); font-size:12px; letter-spacing:.08em;
+            text-transform:uppercase; color:var(--neon2); margin:2px 0 4px;
+            text-shadow:0 0 6px rgba(41,240,255,.5); }
+  .ko-meta{ font-family:var(--tech); font-size:11px; color:#8aa0c0; }
+  .tchip{ display:inline-flex; align-items:center; gap:8px; }
+  .tchip-flag{ font-size:22px; line-height:1; }
+  .tchip-code{ font-family:var(--pixel); font-size:11px; color:var(--neon2);
+               border:1px solid var(--neon); border-radius:3px; padding:2px 5px; }
+  .tchip-name{ font-family:var(--tech); font-weight:600; font-size:14px; color:#e7eaf6; }
+  .tchip-tbd{ opacity:.6; }
+  .tchip-tbd .tchip-name{ color:#8aa0c0; font-style:italic; }
   /* account control pinned to the right of the nav row */
   .st-key-acct{ display:flex; justify-content:flex-end; }
   .brand{ font-family:var(--tech); font-weight:700; color:#cdd6f4;
@@ -1243,13 +1255,19 @@ elif page == "🎯 Match picks":
                         with cols[i % ncol]:
                             mid = m["match_id"]
                             e = ex.get(mid)
-                            st.markdown(f"<div class='ko-team'>{m['home_label']}</div>",
+                            date = (m["kickoff_utc"] or "")[:10]
+                            st.markdown(
+                                f"<div class='ko-head'>{SHORT.get(stage, stage)} · "
+                                f"match {i + 1}</div>"
+                                f"<div class='ko-meta'>{date}</div>",
+                                unsafe_allow_html=True)
+                            st.markdown(flags.chip(m["home_label"]),
                                         unsafe_allow_html=True)
                             hv = st.number_input(
                                 "H", 0, 30, value=e["pred_home"] if e else 0,
                                 key=f"akh_{mid}", disabled=ako_locked,
                                 label_visibility="collapsed")
-                            st.markdown(f"<div class='ko-team'>{m['away_label']}</div>",
+                            st.markdown(flags.chip(m["away_label"]),
                                         unsafe_allow_html=True)
                             av = st.number_input(
                                 "A", 0, 30, value=e["pred_away"] if e else 0,
@@ -1823,15 +1841,32 @@ elif page == "🔐 Admin":
         name2id = {r["name"]: r["team_id"]
                    for r in conn.execute("SELECT team_id, name FROM teams")}
         id2name = {v: k for k, v in name2id.items()}
+        SHORTK = {"Round of 32": "R32", "Round of 16": "R16",
+                  "Quarter-final": "QF", "Semi-final": "SF",
+                  "Third place": "3rd", "Final": "Final"}
         kos = list(conn.execute(
             "SELECT * FROM matches WHERE is_knockout=1 ORDER BY kickoff_utc, match_id"))
         with st.form("ako_setfix"):
             edits = []
+            cur_stage = None
+            idxn = 0
             for m in kos:
-                c1, c2, c3 = st.columns([2, 2, 2])
-                c1.markdown(f"`{m['stage']}`")
+                if m["stage"] != cur_stage:
+                    cur_stage = m["stage"]
+                    idxn = 0
+                    st.markdown(f"#### {m['stage']}")
+                idxn += 1
                 ch = id2name.get(m["home_team_id"], "")
                 ca = id2name.get(m["away_team_id"], "")
+                date = (m["kickoff_utc"] or "")[:10]
+                st.markdown(
+                    f"<div class='ko-head'>{SHORTK.get(m['stage'], m['stage'])} · "
+                    f"match {idxn} <span class='ko-meta'>· {date}</span></div>"
+                    f"{flags.chip(ch or None)}"
+                    f"<span style='color:#5f7180;margin:0 8px'>vs</span>"
+                    f"{flags.chip(ca or None)}",
+                    unsafe_allow_html=True)
+                c2, c3 = st.columns(2)
                 h = c2.selectbox("Home", tnames,
                                  index=tnames.index(ch) if ch in tnames else 0,
                                  key=f"akoh_{m['match_id']}", label_visibility="collapsed")
