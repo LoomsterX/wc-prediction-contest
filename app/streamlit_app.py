@@ -625,10 +625,19 @@ def html_table(rows, headers=None):
     cols = list(rows[0].keys())
     hmap = headers or {}
     head = "".join(f"<th>{html.escape(str(hmap.get(c, c)))}</th>" for c in cols)
+
+    def _fmt(v):
+        # show whole numbers as integers (no trailing .0); leave the rest as-is
+        if isinstance(v, bool):
+            return str(v)
+        if isinstance(v, (int, float)) and float(v).is_integer():
+            return str(int(v))
+        return str(v)
+
     body = ""
     for r in rows:
         body += "<tr>" + "".join(
-            f"<td>{html.escape(str(r.get(c, '')))}</td>" for c in cols) + "</tr>"
+            f"<td>{html.escape(_fmt(r.get(c, '')))}</td>" for c in cols) + "</tr>"
     st.markdown(
         "<div style='overflow-x:auto'><table class='cmp'><thead><tr>"
         f"{head}</tr></thead><tbody>{body}</tbody></table></div>",
@@ -1376,8 +1385,8 @@ elif page == "🃏 Wildcards":
                 if w["type"] == "number":
                     answers[w["wildcard_id"]] = st.number_input(
                         label,
-                        value=float(cur) if cur else 0.0,
-                        step=1.0,
+                        value=int(float(cur)) if cur else 0,
+                        step=1,
                         key=w["wildcard_id"],
                     )
                 elif w["type"] in ("boolean", "choice", "bin"):

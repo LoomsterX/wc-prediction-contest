@@ -140,8 +140,8 @@ def _fact_timeline(conn, per_match) -> list[dict]:
             cum += daily
             out.append({
                 "participant_id": pid, "name": names[pid], "date": d,
-                "daily_points": round(daily, 2),
-                "cumulative_points": round(cum, 2),
+                "daily_points": round(daily),
+                "cumulative_points": round(cum),
             })
     return out
 

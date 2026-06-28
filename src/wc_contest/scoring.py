@@ -54,12 +54,12 @@ def _sign(x: int) -> int:
     return (x > 0) - (x < 0)
 
 
-def score_numeric_wildcard(predicted: float, actual: float, points: float) -> float:
+def score_numeric_wildcard(predicted: float, actual: float, points: float) -> int:
     err = abs(predicted - actual)
     for max_err, frac in config.NUMERIC_WILDCARD_BANDS:
         if err <= max_err:
-            return round(points * frac, 2)
-    return 0.0
+            return round(points * frac)
+    return 0
 
 
 def bin_contains(label: str, value: float) -> bool:
@@ -91,8 +91,8 @@ class ParticipantScore:
     per_match: dict[str, float] = field(default_factory=dict)
 
     @property
-    def total(self) -> float:
-        return round(self.match_points + self.outcome_points + self.wildcard_points, 2)
+    def total(self) -> int:
+        return round(self.match_points + self.outcome_points + self.wildcard_points)
 
 
 # --------------------------------------------------------------------------- #
@@ -226,9 +226,9 @@ def leaderboard_rows(conn: sqlite3.Connection) -> list[dict]:
             "participant_id": s.participant_id,
             "name": s.name,
             "total_points": s.total,
-            "match_points": round(s.match_points, 2),
-            "outcome_points": round(s.outcome_points, 2),
-            "wildcard_points": round(s.wildcard_points, 2),
+            "match_points": round(s.match_points),
+            "outcome_points": round(s.outcome_points),
+            "wildcard_points": round(s.wildcard_points),
             "exact_score_hits": s.exact_score_hits,
         })
     return out
