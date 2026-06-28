@@ -1,16 +1,17 @@
-"""Derive a participant's knockout bracket from their group-stage predictions.
+"""Knockout bracket resolvers.
 
-The Round of 32 is seeded from the player's predicted group standings (group
-winners, runners-up and the eight best third-placed teams) using the official
-2026 FIFA bracket + Annex C third-place allocation table, both stored in
-``data/knockout_bracket.json``. Every later round is then derived from the
-winners of the player's predicted knockout scorelines, so the bracket fills in
-as predictions are entered.
+Two entry points share one resolver (`_resolve_from`):
 
-A knockout match can't end level, so when a player predicts a draw the winner
-is taken from ``match_predictions.pred_advance`` (the advancing team_id). If a
-match isn't predicted yet (or a draw has no advance pick), its winner is
-``None`` and downstream slots stay "to be decided".
+* ``resolve_bracket(conn, pid)`` — the per-player bracket derived from that
+  player's GROUP PREDICTIONS (kept for display; no longer scored).
+* ``actual_bracket(conn)`` — the REAL bracket derived from the actual group
+  RESULTS (+ actual knockout results), i.e. the same fixtures for everyone.
+  Used to auto-fill the real knockout fixtures players predict.
+
+Seeding uses the official 2026 FIFA bracket + Annex C third-place allocation in
+``data/knockout_bracket.json``. A knockout match can't end level, so a draw
+prediction/result carries an ``advance`` team id; if a match isn't decided yet
+its winner is ``None`` and downstream slots stay "to be decided".
 """
 
 from __future__ import annotations
@@ -21,9 +22,6 @@ from functools import lru_cache
 from . import config
 
 
-# --------------------------------------------------------------------------- #
-# Bracket template (official mapping) — loaded once
-# --------------------------------------------------------------------------- #
 @lru_cache(maxsize=1)
 def load_bracket() -> dict:
     with open(config.DATA_DIR / "knockout_bracket.json", encoding="utf-8") as f:
@@ -33,23 +31,42 @@ def load_bracket() -> dict:
 GROUP_CODES = [chr(c) for c in range(ord("A"), ord("L") + 1)]
 
 
-# --------------------------------------------------------------------------- #
-# Predicted group standings (by team_id) from a participant's match picks
-# --------------------------------------------------------------------------- #
-def group_standings(conn, pid) -> dict[str, list[dict]]:
-    """Return {group_code: [rows]} ordered best-first. Each row has team_id,
-    name, group, P/W/D/L/GF/GA/GD/Pts."""
+def _rank_key(r):
+    return (-r["Pts"], -r["GD"], -r["GF"], r["team_id"])
+
+
+def _blank_table(conn):
     teams = {r["team_id"]: dict(team_id=r["team_id"], name=r["name"],
                                 group=r["group_code"])
-             for r in conn.execute(
-                 "SELECT team_id, name, group_code FROM teams")}
+             for r in conn.execute("SELECT team_id, name, group_code FROM teams")}
     tbl: dict[str, dict] = {}
     for tid, t in teams.items():
         if t["group"]:
             tbl.setdefault(t["group"], {})[tid] = dict(
                 team_id=tid, name=t["name"], group=t["group"],
                 P=0, W=0, D=0, L=0, GF=0, GA=0, GD=0, Pts=0)
+    return tbl
 
+
+def _apply(hrow, arow, hg, ag):
+    for row, gf, ga in ((hrow, hg, ag), (arow, ag, hg)):
+        row["P"] += 1
+        row["GF"] += gf
+        row["GA"] += ga
+        row["GD"] = row["GF"] - row["GA"]
+    if hg > ag:
+        hrow["W"] += 1; hrow["Pts"] += 3; arow["L"] += 1
+    elif hg < ag:
+        arow["W"] += 1; arow["Pts"] += 3; hrow["L"] += 1
+    else:
+        hrow["D"] += 1; arow["D"] += 1; hrow["Pts"] += 1; arow["Pts"] += 1
+
+
+# --------------------------------------------------------------------------- #
+# Predicted standings (from a participant's group picks)
+# --------------------------------------------------------------------------- #
+def group_standings(conn, pid) -> dict[str, list[dict]]:
+    tbl = _blank_table(conn)
     preds = {p["match_id"]: p for p in conn.execute(
         "SELECT * FROM match_predictions WHERE participant_id=?", (pid,))}
     for m in conn.execute(
@@ -58,74 +75,37 @@ def group_standings(conn, pid) -> dict[str, list[dict]]:
         p = preds.get(m["match_id"])
         if not p:
             continue
-        g = m["group_code"]
-        hrow = tbl.get(g, {}).get(m["home_team_id"])
-        arow = tbl.get(g, {}).get(m["away_team_id"])
+        hrow = tbl.get(m["group_code"], {}).get(m["home_team_id"])
+        arow = tbl.get(m["group_code"], {}).get(m["away_team_id"])
         if hrow is None or arow is None:
             continue
-        hg, ag = int(p["pred_home"]), int(p["pred_away"])
-        for row, gf, ga in ((hrow, hg, ag), (arow, ag, hg)):
-            row["P"] += 1
-            row["GF"] += gf
-            row["GA"] += ga
-            row["GD"] = row["GF"] - row["GA"]
-        if hg > ag:
-            hrow["W"] += 1; hrow["Pts"] += 3; arow["L"] += 1
-        elif hg < ag:
-            arow["W"] += 1; arow["Pts"] += 3; hrow["L"] += 1
-        else:
-            hrow["D"] += 1; arow["D"] += 1; hrow["Pts"] += 1; arow["Pts"] += 1
-
-    out = {}
-    for g, rows in tbl.items():
-        out[g] = sorted(rows.values(),
-                        key=lambda r: (-r["Pts"], -r["GD"], -r["GF"], r["team_id"]))
-    return out
+        _apply(hrow, arow, int(p["pred_home"]), int(p["pred_away"]))
+    return {g: sorted(rows.values(), key=_rank_key) for g, rows in tbl.items()}
 
 
-def _rank_key(r):
-    return (-r["Pts"], -r["GD"], -r["GF"], r["team_id"])
-
-
-# --------------------------------------------------------------------------- #
-# Qualifiers: winners, runners-up, and the best 8 third-placed teams
-# --------------------------------------------------------------------------- #
 def qualifiers(conn, pid):
     standings = group_standings(conn, pid)
-    # only meaningful once every group has a full set of 4 teams ranked
     complete = all(len(standings.get(g, [])) >= 3 for g in GROUP_CODES)
-    thirds = []
-    for g in GROUP_CODES:
-        rows = standings.get(g, [])
-        if len(rows) >= 3:
-            thirds.append(rows[2])
-    thirds_sorted = sorted(thirds, key=_rank_key)
-    best8_groups = sorted(t["group"] for t in thirds_sorted[:8])
+    thirds = [standings[g][2] for g in GROUP_CODES if len(standings.get(g, [])) >= 3]
+    best8_groups = sorted(t["group"] for t in sorted(thirds, key=_rank_key)[:8])
     return standings, best8_groups, complete
 
 
-# --------------------------------------------------------------------------- #
-# Resolve the full bracket for one participant
-# --------------------------------------------------------------------------- #
 def resolve_bracket(conn, pid) -> dict[str, dict]:
-    """Return {ko_match_id: slot} where slot has:
-        home_id, away_id (team_id or None), home_label, away_label,
-        winner_id, loser_id, stage, num (official match number).
-    """
-    bracket = load_bracket()
+    """Per-player bracket from their group predictions (display only)."""
     names = {r["team_id"]: r["name"]
              for r in conn.execute("SELECT team_id, name FROM teams")}
     preds = {p["match_id"]: p for p in conn.execute(
         "SELECT * FROM match_predictions WHERE participant_id=?", (pid,))}
-
     standings, best8_groups, complete = qualifiers(conn, pid)
     return _resolve_from(conn, names, preds, standings, best8_groups, complete)
 
 
+# --------------------------------------------------------------------------- #
+# Shared resolver. `preds` maps ko_id -> object with pred_home/pred_away/
+# pred_advance (a participant's picks OR the actual results shaped the same way).
+# --------------------------------------------------------------------------- #
 def _resolve_from(conn, names, preds, standings, best8_groups, complete):
-    """Shared bracket resolver. `preds` maps ko_id -> object with
-    pred_home/pred_away/pred_advance (a participant's picks, OR the actual
-    results shaped the same way). `standings` is {group: [rows best-first]}."""
     bracket = load_bracket()
     alloc = bracket["third_alloc"].get("".join(best8_groups)) if complete else None
 
@@ -198,7 +178,6 @@ def _resolve_from(conn, names, preds, standings, best8_groups, complete):
             home_id, home_label = from_feeder(hres, hnum)
             away_id, away_label = from_feeder(ares, anum)
 
-        win_id, lose_id = (None, None)
         resolved[num] = {
             "num": num, "ko_id": ko_id,
             "home_id": home_id, "away_id": away_id,
@@ -213,21 +192,10 @@ def _resolve_from(conn, names, preds, standings, best8_groups, complete):
 
 
 # --------------------------------------------------------------------------- #
-# ACTUAL bracket — the real fixtures everyone predicts, derived from the
-# real GROUP RESULTS + real KO RESULTS (match_results), not from any player's
-# predictions. Used by the "Actual knockout" feature / admin auto-fill.
+# ACTUAL standings/bracket — from real match_results (group + knockout)
 # --------------------------------------------------------------------------- #
 def actual_group_standings(conn) -> dict[str, list[dict]]:
-    """Group standings from real match_results (group games only)."""
-    teams = {r["team_id"]: dict(team_id=r["team_id"], name=r["name"],
-                                group=r["group_code"])
-             for r in conn.execute("SELECT team_id, name, group_code FROM teams")}
-    tbl: dict[str, dict] = {}
-    for tid, t in teams.items():
-        if t["group"]:
-            tbl.setdefault(t["group"], {})[tid] = dict(
-                team_id=tid, name=t["name"], group=t["group"],
-                P=0, W=0, D=0, L=0, GF=0, GA=0, GD=0, Pts=0)
+    tbl = _blank_table(conn)
     results = {r["match_id"]: r for r in conn.execute("SELECT * FROM match_results")}
     for m in conn.execute(
             "SELECT match_id, group_code, home_team_id, away_team_id "
@@ -235,34 +203,20 @@ def actual_group_standings(conn) -> dict[str, list[dict]]:
         r = results.get(m["match_id"])
         if not r:
             continue
-        g = m["group_code"]
-        hrow = tbl.get(g, {}).get(m["home_team_id"])
-        arow = tbl.get(g, {}).get(m["away_team_id"])
+        hrow = tbl.get(m["group_code"], {}).get(m["home_team_id"])
+        arow = tbl.get(m["group_code"], {}).get(m["away_team_id"])
         if hrow is None or arow is None:
             continue
-        hg, ag = int(r["home_goals"]), int(r["away_goals"])
-        for row, gf, ga in ((hrow, hg, ag), (arow, ag, hg)):
-            row["P"] += 1
-            row["GF"] += gf
-            row["GA"] += ga
-            row["GD"] = row["GF"] - row["GA"]
-        if hg > ag:
-            hrow["W"] += 1; hrow["Pts"] += 3; arow["L"] += 1
-        elif hg < ag:
-            arow["W"] += 1; arow["Pts"] += 3; hrow["L"] += 1
-        else:
-            hrow["D"] += 1; arow["D"] += 1; hrow["Pts"] += 1; arow["Pts"] += 1
+        _apply(hrow, arow, int(r["home_goals"]), int(r["away_goals"]))
     return {g: sorted(rows.values(), key=_rank_key) for g, rows in tbl.items()}
 
 
 def actual_bracket(conn) -> dict[str, dict]:
-    """Resolve the REAL bracket from actual results. R32 from real group
-    standings; later rounds from real KO results (match_results) + the
-    'advance' column. Returns {ko_id: slot} like resolve_bracket."""
+    """Real bracket from actual results. R32 from real group standings; later
+    rounds from real KO results (match_results) + the 'advance' column."""
     names = {r["team_id"]: r["name"]
              for r in conn.execute("SELECT team_id, name FROM teams")}
     standings = actual_group_standings(conn)
-    # shape real KO results as a preds-like map keyed by ko_id
     preds = {}
     for r in conn.execute("SELECT * FROM match_results"):
         preds[r["match_id"]] = {
@@ -270,7 +224,7 @@ def actual_bracket(conn) -> dict[str, dict]:
             "pred_advance": r["advance"],
         }
     complete = all(
-        sum(row["P"] for row in standings.get(g, [])) >= 12  # 4 teams x 3 games
+        sum(row["P"] for row in standings.get(g, [])) >= 12
         for g in GROUP_CODES)
     thirds = [standings[g][2] for g in GROUP_CODES if len(standings.get(g, [])) >= 3]
     best8_groups = sorted(t["group"] for t in sorted(thirds, key=_rank_key)[:8])
