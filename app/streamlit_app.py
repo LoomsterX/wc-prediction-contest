@@ -1850,6 +1850,54 @@ elif page == "🔐 Admin":
         cx_clear_settings()
         st.rerun()
 
+    # ---- submission stats ----
+    st.divider()
+    st.subheader(":material/insights: Submission stats")
+    st.caption("Who has locked in what. 'Submitted' = pressed the final submit "
+               "(everything frozen & scoring).")
+    splayers = list(conn.execute("SELECT participant_id, name FROM participants ORDER BY name"))
+    sn = len(splayers)
+    if not sn:
+        st.caption("No players yet.")
+    else:
+        group_total = len(dbmod.GROUP_CODES)
+        wc_total = conn.execute("SELECT COUNT(*) FROM wildcards").fetchone()[0]
+        scopes_by: dict[int, set] = {}
+        for r in conn.execute("SELECT participant_id AS pid, scope FROM pred_locks"):
+            scopes_by.setdefault(r["pid"], set()).add(r["scope"])
+        wc_by = {r["pid"]: r["c"] for r in conn.execute(
+            "SELECT participant_id AS pid, COUNT(*) AS c FROM wildcard_predictions "
+            "GROUP BY participant_id")}
+
+        def _scopes(pid):
+            return scopes_by.get(pid, set())
+
+        def _groups(pid):
+            return sum(1 for g in dbmod.GROUP_CODES if f"group:{g}" in _scopes(pid))
+
+        def _ko(pid):
+            return any(s.startswith("ko:") for s in _scopes(pid))
+
+        def _final(pid):
+            return "final" in _scopes(pid)
+
+        ids = [p["participant_id"] for p in splayers]
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Players", sn)
+        c2.metric("Submitted", f"{sum(_final(i) for i in ids)}/{sn}")
+        c3.metric("All groups locked", f"{sum(_groups(i) == group_total for i in ids)}/{sn}")
+        c4.metric("Knockout locked", f"{sum(_ko(i) for i in ids)}/{sn}")
+        c5.metric("Wildcards complete",
+                  f"{sum(wc_by.get(i, 0) >= wc_total for i in ids)}/{sn}")
+        st.dataframe(
+            [{"Player": p["name"],
+              "Groups": f"{_groups(p['participant_id'])}/{group_total}",
+              "Knockout": "✓" if _ko(p["participant_id"]) else "—",
+              "Wildcards": f"{wc_by.get(p['participant_id'], 0)}/{wc_total}",
+              "Submitted": "✓" if _final(p["participant_id"]) else "—"}
+             for p in splayers],
+            hide_index=True, use_container_width=True)
+
     st.divider()
     with st.expander("Wildcard results"):
         st.caption(
