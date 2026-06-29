@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -127,6 +128,35 @@ def set_setting(conn, key, value) -> None:
     upsert(conn, "settings", {"key": key, "value": str(value)}, ["key"])
 
 
+# --------------------------------------------------------------------------- #
+# Knockout feeder overrides — let the admin change which earlier match feeds
+# each later-round slot (e.g. "home of R16 #1 = Winner of R32 #2"). Stored as a
+# small JSON blob in `settings` under key "ko_feeders"; only changed slots are
+# kept, everything else falls back to the official 2026 bracket.
+# Shape: {ko_id: {"home": [res, src_ko_id], "away": [res, src_ko_id]}}  res=W|L
+# --------------------------------------------------------------------------- #
+def get_ko_feeder_overrides(conn) -> dict:
+    raw = get_setting(conn, "ko_feeders", "")
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+        return data if isinstance(data, dict) else {}
+    except (ValueError, TypeError):
+        return {}
+
+
+def set_ko_feeder_override(conn, match_id, home_res, home_src,
+                           away_res, away_src) -> None:
+    data = get_ko_feeder_overrides(conn)
+    data[match_id] = {"home": [home_res, home_src], "away": [away_res, away_src]}
+    set_setting(conn, "ko_feeders", json.dumps(data))
+
+
+def clear_ko_feeder_overrides(conn) -> None:
+    set_setting(conn, "ko_feeders", "")
+
+
 def predictions_locked(conn) -> bool:
     return get_setting(conn, "predictions_locked", "0") == "1"
 
@@ -172,6 +202,44 @@ def set_wildcards_pred_locked(conn, locked: bool) -> None:
 def any_stage_locked(conn) -> bool:
     return (any_group_pred_locked(conn) or knockout_pred_locked(conn)
             or wildcards_pred_locked(conn))
+
+
+# --------------------------------------------------------------------------- #
+# ACTUAL knockout (real fixtures everyone predicts) — separate global lock +
+# helpers to assign the real teams to knockout `matches` rows. Does NOT affect
+# the per-player derived bracket (which ignores matches' KO team ids).
+# --------------------------------------------------------------------------- #
+def actual_ko_locked(conn) -> bool:
+    return get_setting(conn, "glock_actual_ko", "0") == "1"
+
+
+def set_actual_ko_locked(conn, locked: bool) -> None:
+    set_setting(conn, "glock_actual_ko", "1" if locked else "0")
+
+
+def set_actual_ko_teams(conn, match_id, home_team_id, away_team_id) -> None:
+    names = {r["team_id"]: r["name"]
+             for r in conn.execute("SELECT team_id, name FROM teams")}
+    conn.execute(
+        "UPDATE matches SET home_team_id=?, away_team_id=?, home_label=?, "
+        "away_label=? WHERE match_id=? AND is_knockout=1",
+        (home_team_id, away_team_id, names.get(home_team_id),
+         names.get(away_team_id), match_id))
+
+
+def autofill_actual_ko(conn) -> int:
+    """Populate the real teams on the Round-of-32 `matches` rows from the actual
+    group results. Only R32 is seeded — later rounds derive from each player's
+    own predicted winners. Returns how many R32 fixtures now have both teams."""
+    from . import knockout
+    n = 0
+    for ko_id, slot in knockout.actual_bracket(conn).items():
+        if not ko_id.startswith("KO_Roundof32_"):
+            continue
+        if slot["home_id"] and slot["away_id"]:
+            set_actual_ko_teams(conn, ko_id, slot["home_id"], slot["away_id"])
+            n += 1
+    return n
 
 
 # --------------------------------------------------------------------------- #

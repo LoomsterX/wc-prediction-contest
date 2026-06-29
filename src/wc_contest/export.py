@@ -105,9 +105,11 @@ def _fact_match_points(conn) -> list[dict]:
         if p["match_id"] not in res:
             continue
         m = meta.get(p["match_id"])
-        if m is None or not scoring.prediction_submitted(
+        if m is None or m["is_knockout"]:        # derived knockout is NOT scored
+            continue
+        if not scoring.prediction_submitted(
                 locks.get(p["participant_id"], set()), m):
-            continue                         # only submitted predictions score
+            continue                             # only submitted predictions score
         r = res[p["match_id"]]
         pts, exact = scoring.score_match(
             p["pred_home"], p["pred_away"], r["home_goals"], r["away_goals"],
@@ -118,6 +120,27 @@ def _fact_match_points(conn) -> list[dict]:
             "match_id": p["match_id"],
             "date": date_by_match.get(p["match_id"], ""),
             "stage": stage_by_match.get(p["match_id"], ""),
+            "points": pts,
+            "is_exact": int(exact),
+        })
+    # actual-knockout predictions (the real fixtures everyone predicts) DO score
+    try:
+        akos = list(conn.execute("SELECT * FROM actual_ko_predictions"))
+    except Exception:
+        akos = []
+    for p in akos:
+        if p["match_id"] not in res:
+            continue
+        r = res[p["match_id"]]
+        pts, exact = scoring.score_match(
+            p["pred_home"], p["pred_away"], r["home_goals"], r["away_goals"],
+            p["pred_advance"], r["advance"])
+        rows.append({
+            "participant_id": p["participant_id"],
+            "name": name_by_id.get(p["participant_id"], ""),
+            "match_id": f"AKO:{p['match_id']}",
+            "date": date_by_match.get(p["match_id"], ""),
+            "stage": stage_by_match.get(p["match_id"], "Knockout"),
             "points": pts,
             "is_exact": int(exact),
         })
@@ -140,8 +163,8 @@ def _fact_timeline(conn, per_match) -> list[dict]:
             cum += daily
             out.append({
                 "participant_id": pid, "name": names[pid], "date": d,
-                "daily_points": round(daily, 2),
-                "cumulative_points": round(cum, 2),
+                "daily_points": round(daily),
+                "cumulative_points": round(cum),
             })
     return out
 

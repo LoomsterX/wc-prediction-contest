@@ -45,7 +45,7 @@ try:
 except Exception:
     pass
 
-from wc_contest import config, db as dbmod, scoring, export, avatar, knockout  # noqa: E402
+from wc_contest import config, db as dbmod, scoring, export, avatar, knockout, flags  # noqa: E402
 from wc_contest.engine import upsert  # noqa: E402
 
 # Admin password comes ONLY from Streamlit secrets or the ADMIN_PASSWORD env var
@@ -126,12 +126,32 @@ def cx_leaderboard():
     return scoring.leaderboard_rows(conn)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def cx_player_bracket(pid):
+    """A player's derived knockout bracket. Re-derived on every round-button
+    click otherwise (several remote round-trips each time); cache it and clear
+    when the player saves picks or the admin changes fixtures/feeders."""
+    return knockout.actual_player_bracket(conn, pid)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cx_real_r32():
+    """The published Round-of-32 fixtures (shared by all players)."""
+    return knockout.real_r32_teams(conn)
+
+
 def cx_clear_settings():
     cx_settings.clear()
 
 
 def cx_clear_scores():
     cx_leaderboard.clear()
+
+
+def cx_clear_brackets():
+    """Clear derived knockout state after fixtures, feeders or picks change."""
+    cx_player_bracket.clear()
+    cx_real_r32.clear()
 
 
 # convenience views over the cached team list
@@ -289,6 +309,18 @@ st.markdown(
       .st-key-nav_full > div[data-testid="stVerticalBlock"]{ display:none !important; }
       .st-key-nav_burger{ display:block !important; }
   }
+  /* ---- knockout match cards ---- */
+  .ko-head{ font-family:var(--tech); font-size:12px; letter-spacing:.08em;
+            text-transform:uppercase; color:var(--neon2); margin:2px 0 4px;
+            text-shadow:0 0 6px rgba(41,240,255,.5); }
+  .ko-meta{ font-family:var(--tech); font-size:11px; color:#8aa0c0; }
+  .tchip{ display:inline-flex; align-items:center; gap:8px; }
+  .tchip-flag{ font-size:22px; line-height:1; }
+  .tchip-code{ font-family:var(--pixel); font-size:11px; color:var(--neon2);
+               border:1px solid var(--neon); border-radius:3px; padding:2px 5px; }
+  .tchip-name{ font-family:var(--tech); font-weight:600; font-size:14px; color:#e7eaf6; }
+  .tchip-tbd{ opacity:.6; }
+  .tchip-tbd .tchip-name{ color:#8aa0c0; font-style:italic; }
   /* account control pinned to the right of the nav row */
   .st-key-acct{ display:flex; justify-content:flex-end; }
   .brand{ font-family:var(--tech); font-weight:700; color:#cdd6f4;
@@ -625,10 +657,19 @@ def html_table(rows, headers=None):
     cols = list(rows[0].keys())
     hmap = headers or {}
     head = "".join(f"<th>{html.escape(str(hmap.get(c, c)))}</th>" for c in cols)
+
+    def _fmt(v):
+        # show whole numbers as integers (no trailing .0); leave the rest as-is
+        if isinstance(v, bool):
+            return str(v)
+        if isinstance(v, (int, float)) and float(v).is_integer():
+            return str(int(v))
+        return str(v)
+
     body = ""
     for r in rows:
         body += "<tr>" + "".join(
-            f"<td>{html.escape(str(r.get(c, '')))}</td>" for c in cols) + "</tr>"
+            f"<td>{html.escape(_fmt(r.get(c, '')))}</td>" for c in cols) + "</tr>"
     st.markdown(
         "<div style='overflow-x:auto'><table class='cmp'><thead><tr>"
         f"{head}</tr></thead><tbody>{body}</tbody></table></div>",
@@ -1184,156 +1225,113 @@ elif page == "🎯 Match picks":
                     )
 
         # ------------------------------------------------------------------- #
-        else:  # Knockout — functional entry; centered bracket layout is TBD
-            if not groups_done:
-                missing = [g for g in dbmod.GROUP_CODES if f"group:{g}" not in scopes]
-                st.info(
-                    ":material/lock: Knockout predictions unlock once you've locked in **all 12 "
-                    "groups**. Still to lock in: "
-                    + ", ".join(f"Group {g}" for g in missing)
-                )
+        else:  # Knockout — predict your WHOLE bracket; R16+ derive from your picks
+            ako_locked = dbmod.actual_ko_locked(conn)
+            SHORT = {"Round of 32": "R32", "Round of 16": "R16",
+                     "Quarter-final": "QF", "Semi-final": "SF",
+                     "Third place": "3rd", "Final": "Final"}
+            r32 = cx_real_r32()
+            if not r32:
+                st.info(":material/lock: Knockout fixtures aren't published yet — "
+                        "they appear once the group stage is done and the organiser "
+                        "publishes the real Round of 32.")
             else:
-                can_edit = knockout_editable(pid)
-                if setting_on("glock_knockout"):
-                    st.info(":material/lock: Knockout predictions are closed by the organiser — "
-                            "viewing only.")
-                elif submitted_final:
-                    st.caption("Your predictions are submitted — ask an admin to "
-                               "unlock to edit.")
-
-                # Derived bracket — recomputed only on rerun (i.e. after Save/Submit),
-                # so the next round's match-ups refresh exactly then, not while typing.
-                bracket = knockout.resolve_bracket(conn, pid)
-
-                SHORT = {"Round of 32": "R32", "Round of 16": "R16",
-                         "Quarter-final": "QF", "Semi-final": "SF",
-                         "Third place": "3rd", "Final": "Final"}
-                ss().setdefault("sel_ko", ko_stages[0])
-                if ss().sel_ko not in ko_stages:
-                    ss().sel_ko = ko_stages[0]
-
-                # ---- final submit (shown above the round filter) ----
-                if ko_done and not submitted_final and can_edit:
-                    st.markdown("**All groups and knockout rounds are submitted.**")
-                    st.caption("Submitting freezes ALL your picks. An admin can "
-                               "unlock you afterwards if you need changes.")
-                    if st.button(":material/check_circle: Submit predictions (final)",
-                                 type="primary"):
-                        dbmod.lock_scope(conn, pid, "final")
-                        conn.commit()
-                        cx_clear_scores()
-                        ss().balloons_done = False
-                        st.success("Predictions submitted and locked! 🎉")
-                        st.rerun()
-                elif not ko_done and not submitted_final:
-                    remaining = [SHORT.get(s, s) for s in ko_stages
-                                 if f"ko:{s}" not in scopes]
-                    st.caption("Submit every knockout round to enable the final "
-                               "**Submit predictions** button. Remaining: "
-                               + ", ".join(remaining))
-                st.divider()
-
-                # green tiles for submitted rounds
-                sub_idx = [i for i, s in enumerate(ko_stages) if f"ko:{s}" in scopes]
-                if sub_idx:
-                    css = "".join(
-                        f".st-key-kobtn_{i} button{{background:#0f7b3f !important;"
-                        f"border-color:#28e07a !important;color:#eafff2 !important;"
-                        f"box-shadow:0 0 12px rgba(40,224,122,.5) !important;}}"
-                        for i in sub_idx)
-                    st.markdown(f"<style>{css}</style>", unsafe_allow_html=True)
-
-                st.write("**Pick a round:**  ·  🟢 = submitted")
-                kcols = st.columns(len(ko_stages))
-                for i, s in enumerate(ko_stages):
-                    label = SHORT.get(s, s) + (" ✓" if f"ko:{s}" in scopes else "")
+                if ako_locked:
+                    st.info(":material/lock: Knockout predictions are closed by the "
+                            "organiser — viewing only.")
+                st.caption("Predict your **whole** bracket: pick the Round of 32, and "
+                           "each later round fills in from the winners you choose.")
+                bracket = cx_player_bracket(pid)
+                meta = {m["match_id"]: m for m in cx_matches()
+                        if m["is_knockout"]}
+                stages_avail = ko_stages
+                ss().setdefault("sel_ko", stages_avail[0])
+                if ss().sel_ko not in stages_avail:
+                    ss().sel_ko = stages_avail[0]
+                st.write("**Pick a round:**")
+                kcols = st.columns(len(stages_avail))
+                for i, s in enumerate(stages_avail):
                     btype = "primary" if ss().sel_ko == s else "secondary"
-                    if kcols[i].button(label, key=f"kobtn_{i}", type=btype,
-                                       use_container_width=True):
+                    if kcols[i].button(SHORT.get(s, s), key=f"kobtn_{i}",
+                                       type=btype, use_container_width=True):
                         ss().sel_ko = s
                         st.rerun()
 
                 stage = ss().sel_ko
-                stage_submitted = f"ko:{stage}" in scopes
-                st.subheader(stage + ("  🟢 submitted" if stage_submitted else ""))
-                if stage_submitted and not submitted_final and not setting_on("glock_knockout"):
-                    st.info(f"🟢 {stage} is submitted and locked — it counts for "
-                            "points. Ask an admin to unlock to change.")
-                elif not setting_on("glock_knockout") and not submitted_final:
-                    st.caption("Match-ups derive from your earlier rounds. **Save** "
-                               "updates the next round's match-ups; **Submit** locks "
-                               "this round for points.")
+                st.subheader(stage)
+                ex = {r["match_id"]: r for r in conn.execute(
+                    "SELECT * FROM actual_ko_predictions WHERE participant_id=?", (pid,))}
+                slots = [s for s in bracket.values()
+                         if meta.get(s["ko_id"], {}).get("stage") == stage]
+                slots.sort(key=lambda s: s["num"])
 
-                stage_matches = [m for m in cx_matches()
-                                 if m["is_knockout"] and m["stage"] == stage]
-                stage_matches.sort(
-                    key=lambda mm: int(str(mm["match_id"]).rsplit("_", 1)[-1]))
+                def _side_html(slot, side):
+                    tid = slot[f"{side}_id"]
+                    lbl = slot[f"{side}_label"]
+                    if tid:
+                        return flags.chip(lbl)
+                    return ("<span class='tchip tchip-tbd'>🏳️ "
+                            f"<span class='tchip-name'>{lbl}</span></span>")
 
                 picks = []
                 with st.form(f"koform_{stage}"):
-                    fc1, fc2 = st.columns(2)
-                    with fc1:
-                        k_save = st.form_submit_button(
-                            ":material/save: Save", disabled=not can_edit,
-                            use_container_width=True)
-                    with fc2:
-                        k_submit = st.form_submit_button(
-                            f":material/lock: Submit {SHORT.get(stage, stage)}",
-                            type="primary",
-                            disabled=not can_edit, use_container_width=True)
-                    ncol = 2 if len(stage_matches) > 1 else 1
+                    k_submit = st.form_submit_button(
+                        f":material/lock: Lock in {SHORT.get(stage, stage)} picks",
+                        type="primary", disabled=ako_locked, use_container_width=True)
+                    ncol = 2 if len(slots) > 1 else 1
                     cols = st.columns(ncol)
-                    for i, m in enumerate(stage_matches):
+                    for i, slot in enumerate(slots):
                         with cols[i % ncol]:
-                            mid = m["match_id"]
-                            slot = bracket.get(mid, {})
-                            home_id, away_id = slot.get("home_id"), slot.get("away_id")
-                            hl = slot.get("home_label", m["home_label"])
-                            al = slot.get("away_label", m["away_label"])
-                            ex = existing.get(mid)
-                            st.markdown(f"<div class='ko-team'>{hl}</div>",
-                                        unsafe_allow_html=True)
+                            mid = slot["ko_id"]
+                            e = ex.get(mid)
+                            date = (meta.get(mid, {}).get("kickoff_utc") or "")[:10]
+                            ready = (slot["home_id"] is not None
+                                     and slot["away_id"] is not None)
+                            st.markdown(
+                                f"<div class='ko-head'>{SHORT.get(stage, stage)} · "
+                                f"match {i + 1}</div><div class='ko-meta'>{date}</div>",
+                                unsafe_allow_html=True)
+                            st.markdown(_side_html(slot, "home"), unsafe_allow_html=True)
                             hv = st.number_input(
-                                "H", 0, 30, value=ex["pred_home"] if ex else 0,
-                                key=f"h_{mid}", disabled=not can_edit,
+                                "H", 0, 30, value=e["pred_home"] if e else 0,
+                                key=f"akh_{mid}", disabled=ako_locked or not ready,
                                 label_visibility="collapsed")
-                            st.markdown(f"<div class='ko-team'>{al}</div>",
-                                        unsafe_allow_html=True)
+                            st.markdown(_side_html(slot, "away"), unsafe_allow_html=True)
                             av = st.number_input(
-                                "A", 0, 30, value=ex["pred_away"] if ex else 0,
-                                key=f"a_{mid}", disabled=not can_edit,
+                                "A", 0, 30, value=e["pred_away"] if e else 0,
+                                key=f"aka_{mid}", disabled=ako_locked or not ready,
                                 label_visibility="collapsed")
                             adv = None
-                            if home_id is not None and away_id is not None:
-                                opts = [home_id, away_id]
-                                cur = ex["pred_advance"] if ex else None
+                            if ready:
+                                opts = [slot["home_id"], slot["away_id"]]
+                                cur = e["pred_advance"] if e else None
                                 idx = opts.index(cur) if cur in opts else 0
                                 adv = st.radio(
                                     "Advances if level", opts, index=idx,
-                                    format_func=lambda t, h=home_id, mm=mid:
-                                        bracket[mm]["home_label" if t == h
-                                                    else "away_label"],
-                                    key=f"adv_{mid}", disabled=not can_edit,
+                                    format_func=lambda t, h=slot["home_id"],
+                                    hl=slot["home_label"], al=slot["away_label"]:
+                                        hl if t == h else al,
+                                    key=f"akadv_{mid}", disabled=ako_locked,
                                     horizontal=True)
-                            picks.append((mid, hv, av, adv))
+                            else:
+                                st.caption("Decide the earlier round first.")
+                            picks.append((mid, hv, av, adv, ready))
                             st.markdown("<div class='ko-gap'></div>",
                                         unsafe_allow_html=True)
-                if k_save or k_submit:
-                    for mid, hv, av, adv in picks:
-                        upsert(conn, "match_predictions", {
+                if k_submit:
+                    for mid, hv, av, adv, ready in picks:
+                        if not ready:
+                            continue
+                        upsert(conn, "actual_ko_predictions", {
                             "participant_id": pid, "match_id": mid,
                             "pred_home": int(hv), "pred_away": int(av),
                             "pred_advance": int(adv) if adv is not None else None,
                             "submitted_at": dbmod.now_iso(),
                         }, ["participant_id", "match_id"])
-                    if k_submit:
-                        dbmod.lock_scope(conn, pid, f"ko:{stage}")
-                        cx_clear_scores()
+                    cx_clear_scores()
+                    cx_clear_brackets()
                     conn.commit()
-                    st.success(
-                        f"{stage} submitted & locked! 🏆"
-                        if k_submit else
-                        f"{stage} saved — next round's match-ups updated.")
+                    st.success(f"{stage} picks locked in! 🏆")
                     st.rerun()
 
 # =========================================================================== #
@@ -1376,8 +1374,8 @@ elif page == "🃏 Wildcards":
                 if w["type"] == "number":
                     answers[w["wildcard_id"]] = st.number_input(
                         label,
-                        value=float(cur) if cur else 0.0,
-                        step=1.0,
+                        value=int(float(cur)) if cur else 0,
+                        step=1,
                         key=w["wildcard_id"],
                     )
                 elif w["type"] in ("boolean", "choice", "bin"):
@@ -1849,6 +1847,198 @@ elif page == "🔐 Admin":
         dbmod.set_wildcards_pred_locked(conn, wc_new)
         cx_clear_settings()
         st.rerun()
+
+    # ---- actual knockout (real fixtures everyone predicts) ----
+    st.divider()
+    st.subheader(":material/trophy: Actual knockout fixtures")
+    n_set = conn.execute(
+        "SELECT COUNT(*) FROM matches WHERE is_knockout=1 AND home_team_id IS NOT NULL "
+        "AND away_team_id IS NOT NULL").fetchone()[0]
+    st.caption(f"Real fixtures everyone predicts (separate from the derived "
+               f"bracket). {n_set} fixture(s) have real teams set so far.")
+    ak1, ak2 = st.columns(2)
+    if ak1.button(":material/auto_fix_high: Auto-fill from group results",
+                  use_container_width=True):
+        n = dbmod.autofill_actual_ko(conn)
+        cx_clear_settings()
+        cx_clear_brackets()
+        st.success(f"Set real teams on {n} knockout fixture(s) from the entered "
+                   "group results. (Re-run after each round's results are in.)")
+        st.rerun()
+    ako_cur = dbmod.actual_ko_locked(conn)
+    ako_new = ak2.toggle(":material/lock: Lock actual-KO predictions",
+                         value=ako_cur, key="glock_ako")
+    if ako_new != ako_cur:
+        dbmod.set_actual_ko_locked(conn, ako_new)
+        cx_clear_settings()
+        st.rerun()
+    with st.expander("Set the Round of 32 fixtures"):
+        st.caption("Set only the **Round of 32** here (the real draw). Each player's "
+                   "R16 → Final then derive automatically from the winners THEY pick.")
+        tnames = [""] + team_options()
+        name2id = {r["name"]: r["team_id"]
+                   for r in conn.execute("SELECT team_id, name FROM teams")}
+        id2name = {v: k for k, v in name2id.items()}
+        r32rows = list(conn.execute(
+            "SELECT * FROM matches WHERE is_knockout=1 AND stage='Round of 32' "
+            "ORDER BY kickoff_utc, match_id"))
+        with st.form("ako_setfix"):
+            edits = []
+            for n, m in enumerate(r32rows, 1):
+                ch = id2name.get(m["home_team_id"], "")
+                ca = id2name.get(m["away_team_id"], "")
+                date = (m["kickoff_utc"] or "")[:10]
+                st.markdown(
+                    f"<div class='ko-head'>R32 · match {n} "
+                    f"<span class='ko-meta'>· {date}</span></div>"
+                    f"{flags.chip(ch or None)}"
+                    f"<span style='color:#5f7180;margin:0 8px'>vs</span>"
+                    f"{flags.chip(ca or None)}",
+                    unsafe_allow_html=True)
+                c2, c3 = st.columns(2)
+                h = c2.selectbox("Home", tnames,
+                                 index=tnames.index(ch) if ch in tnames else 0,
+                                 key=f"akoh_{m['match_id']}", label_visibility="collapsed")
+                a = c3.selectbox("Away", tnames,
+                                 index=tnames.index(ca) if ca in tnames else 0,
+                                 key=f"akoa_{m['match_id']}", label_visibility="collapsed")
+                edits.append((m["match_id"], h, a))
+            if st.form_submit_button("Save Round of 32"):
+                cnt = 0
+                for mid, h, a in edits:
+                    if h and a:
+                        dbmod.set_actual_ko_teams(conn, mid, name2id[h], name2id[a])
+                        cnt += 1
+                cx_clear_settings()
+                cx_clear_brackets()
+                st.success(f"Saved {cnt} Round-of-32 fixture(s).")
+
+    with st.expander("How later rounds are built (R16 → Final)"):
+        st.caption("Each later match takes the **winner** (or, for the 3rd-place "
+                   "match, the **loser**) of two earlier matches. Defaults follow the "
+                   "official 2026 bracket — change a source below only if your bracket "
+                   "needs it. Players still pick winners; these mappings decide who "
+                   "meets whom, and every player's bracket updates to match.")
+        SHORTK = {"Round of 32": "R32", "Round of 16": "R16", "Quarter-final": "QF",
+                  "Semi-final": "SF", "Third place": "3rd", "Final": "Final"}
+        PRIOR = {"Round of 16": "Round of 32", "Quarter-final": "Round of 16",
+                 "Semi-final": "Quarter-final", "Third place": "Semi-final",
+                 "Final": "Semi-final"}
+        meta2 = {m["match_id"]: m for m in conn.execute(
+            "SELECT match_id, stage, home_team_id, away_team_id "
+            "FROM matches WHERE is_knockout=1")}
+        eff = knockout.effective_feeders(conn)
+
+        # label each ko_id ("R32 #3") and list the members of each round in order
+        lbl, members = {}, {}
+        for kid in knockout.ko_id_order():
+            stage = meta2.get(kid, {}).get("stage")
+            members.setdefault(stage, []).append(kid)
+            lbl[kid] = f"{SHORTK.get(stage, stage)} #{len(members[stage])}"
+
+        _names = {t["team_id"]: t["name"] for t in cx_teams()}
+
+        def _src_label(kid):
+            m = meta2.get(kid, {})
+            ids = (m.get("home_team_id"), m.get("away_team_id"))
+            tag = ""
+            if all(ids):
+                tag = (f" ({flags.code(_names.get(ids[0]))}"
+                       f"/{flags.code(_names.get(ids[1]))})")
+            return lbl.get(kid, kid) + tag
+
+        later = [k for k in knockout.ko_id_order()
+                 if meta2.get(k, {}).get("stage") in PRIOR]
+        with st.form("ko_feeders"):
+            edits = []
+            for kid in later:
+                stage = meta2[kid]["stage"]
+                res = "L" if stage == "Third place" else "W"
+                verb = "Loser" if res == "L" else "Winner"
+                opts = members.get(PRIOR[stage], [])
+                hdef, adef = eff[kid]["home"][1], eff[kid]["away"][1]
+                st.markdown(f"<div class='ko-head'>{lbl[kid]}</div>",
+                            unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                hs = c1.selectbox(
+                    f"Home = {verb} of", opts,
+                    index=opts.index(hdef) if hdef in opts else 0,
+                    format_func=_src_label, key=f"fdh_{kid}")
+                as_ = c2.selectbox(
+                    f"Away = {verb} of", opts,
+                    index=opts.index(adef) if adef in opts else 0,
+                    format_func=_src_label, key=f"fda_{kid}")
+                edits.append((kid, res, hs, as_))
+            b1, b2 = st.columns(2)
+            save_fd = b1.form_submit_button("Save matchups", type="primary",
+                                            use_container_width=True)
+            reset_fd = b2.form_submit_button("Reset to official bracket",
+                                             use_container_width=True)
+        if save_fd:
+            for kid, res, hs, as_ in edits:
+                dbmod.set_ko_feeder_override(conn, kid, res, hs, res, as_)
+            conn.commit()
+            cx_clear_settings()
+            cx_clear_scores()
+            cx_clear_brackets()
+            st.success("Saved. Every player's R16 → Final now follows these matchups.")
+            st.rerun()
+        if reset_fd:
+            dbmod.clear_ko_feeder_overrides(conn)
+            conn.commit()
+            cx_clear_settings()
+            cx_clear_scores()
+            cx_clear_brackets()
+            st.success("Reset to the official 2026 bracket.")
+            st.rerun()
+
+    # ---- submission stats ----
+    st.divider()
+    st.subheader(":material/insights: Submission stats")
+    st.caption("Who has locked in what. 'Submitted' = pressed the final submit "
+               "(everything frozen & scoring).")
+    splayers = list(conn.execute("SELECT participant_id, name FROM participants ORDER BY name"))
+    sn = len(splayers)
+    if not sn:
+        st.caption("No players yet.")
+    else:
+        group_total = len(dbmod.GROUP_CODES)
+        wc_total = conn.execute("SELECT COUNT(*) FROM wildcards").fetchone()[0]
+        scopes_by: dict[int, set] = {}
+        for r in conn.execute("SELECT participant_id AS pid, scope FROM pred_locks"):
+            scopes_by.setdefault(r["pid"], set()).add(r["scope"])
+        wc_by = {r["pid"]: r["c"] for r in conn.execute(
+            "SELECT participant_id AS pid, COUNT(*) AS c FROM wildcard_predictions "
+            "GROUP BY participant_id")}
+
+        def _scopes(pid):
+            return scopes_by.get(pid, set())
+
+        def _groups(pid):
+            return sum(1 for g in dbmod.GROUP_CODES if f"group:{g}" in _scopes(pid))
+
+        def _ko(pid):
+            return any(s.startswith("ko:") for s in _scopes(pid))
+
+        def _final(pid):
+            return "final" in _scopes(pid)
+
+        ids = [p["participant_id"] for p in splayers]
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Players", sn)
+        c2.metric("Submitted", f"{sum(_final(i) for i in ids)}/{sn}")
+        c3.metric("All groups locked", f"{sum(_groups(i) == group_total for i in ids)}/{sn}")
+        c4.metric("Knockout locked", f"{sum(_ko(i) for i in ids)}/{sn}")
+        c5.metric("Wildcards complete",
+                  f"{sum(wc_by.get(i, 0) >= wc_total for i in ids)}/{sn}")
+        st.dataframe(
+            [{"Player": p["name"],
+              "Groups": f"{_groups(p['participant_id'])}/{group_total}",
+              "Knockout": "✓" if _ko(p["participant_id"]) else "—",
+              "Wildcards": f"{wc_by.get(p['participant_id'], 0)}/{wc_total}",
+              "Submitted": "✓" if _final(p["participant_id"]) else "—"}
+             for p in splayers],
+            hide_index=True, use_container_width=True)
 
     st.divider()
     with st.expander("Wildcard results"):
