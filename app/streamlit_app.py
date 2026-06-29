@@ -1891,16 +1891,80 @@ elif page == "🔐 Admin":
                 st.success(f"Saved {cnt} Round-of-32 fixture(s).")
 
     with st.expander("How later rounds are built (R16 → Final)"):
-        st.caption("These fill in automatically from each player's predicted "
-                   "winners — nothing to set here.")
-        SHORTK = {"Round of 16": "R16", "Quarter-final": "QF",
+        st.caption("Each later match takes the **winner** (or, for the 3rd-place "
+                   "match, the **loser**) of two earlier matches. Defaults follow the "
+                   "official 2026 bracket — change a source below only if your bracket "
+                   "needs it. Players still pick winners; these mappings decide who "
+                   "meets whom, and every player's bracket updates to match.")
+        SHORTK = {"Round of 32": "R32", "Round of 16": "R16", "Quarter-final": "QF",
                   "Semi-final": "SF", "Third place": "3rd", "Final": "Final"}
+        PRIOR = {"Round of 16": "Round of 32", "Quarter-final": "Round of 16",
+                 "Semi-final": "Quarter-final", "Third place": "Semi-final",
+                 "Final": "Semi-final"}
         meta2 = {m["match_id"]: m for m in conn.execute(
-            "SELECT match_id, stage FROM matches WHERE is_knockout=1")}
-        rows = [{"Round": SHORTK.get(meta2.get(ko_id, {}).get("stage"), ""),
-                 "Home team": d["home"], "Away team": d["away"]}
-                for ko_id, d in knockout.feeder_logic().items()]
-        st.dataframe(rows, hide_index=True, use_container_width=True)
+            "SELECT match_id, stage, home_team_id, away_team_id "
+            "FROM matches WHERE is_knockout=1")}
+        eff = knockout.effective_feeders(conn)
+
+        # label each ko_id ("R32 #3") and list the members of each round in order
+        lbl, members = {}, {}
+        for kid in knockout.ko_id_order():
+            stage = meta2.get(kid, {}).get("stage")
+            members.setdefault(stage, []).append(kid)
+            lbl[kid] = f"{SHORTK.get(stage, stage)} #{len(members[stage])}"
+
+        def _src_label(kid):
+            m = meta2.get(kid, {})
+            ids = (m.get("home_team_id"), m.get("away_team_id"))
+            tag = ""
+            if all(ids):
+                names = {r["team_id"]: r["name"] for r in conn.execute(
+                    "SELECT team_id, name FROM teams")}
+                tag = f" ({flags.code(names.get(ids[0]))}/{flags.code(names.get(ids[1]))})"
+            return lbl.get(kid, kid) + tag
+
+        later = [k for k in knockout.ko_id_order()
+                 if meta2.get(k, {}).get("stage") in PRIOR]
+        with st.form("ko_feeders"):
+            edits = []
+            for kid in later:
+                stage = meta2[kid]["stage"]
+                res = "L" if stage == "Third place" else "W"
+                verb = "Loser" if res == "L" else "Winner"
+                opts = members.get(PRIOR[stage], [])
+                hdef, adef = eff[kid]["home"][1], eff[kid]["away"][1]
+                st.markdown(f"<div class='ko-head'>{lbl[kid]}</div>",
+                            unsafe_allow_html=True)
+                c1, c2 = st.columns(2)
+                hs = c1.selectbox(
+                    f"Home = {verb} of", opts,
+                    index=opts.index(hdef) if hdef in opts else 0,
+                    format_func=_src_label, key=f"fdh_{kid}")
+                as_ = c2.selectbox(
+                    f"Away = {verb} of", opts,
+                    index=opts.index(adef) if adef in opts else 0,
+                    format_func=_src_label, key=f"fda_{kid}")
+                edits.append((kid, res, hs, as_))
+            b1, b2 = st.columns(2)
+            save_fd = b1.form_submit_button("Save matchups", type="primary",
+                                            use_container_width=True)
+            reset_fd = b2.form_submit_button("Reset to official bracket",
+                                             use_container_width=True)
+        if save_fd:
+            for kid, res, hs, as_ in edits:
+                dbmod.set_ko_feeder_override(conn, kid, res, hs, res, as_)
+            conn.commit()
+            cx_clear_settings()
+            cx_clear_scores()
+            st.success("Saved. Every player's R16 → Final now follows these matchups.")
+            st.rerun()
+        if reset_fd:
+            dbmod.clear_ko_feeder_overrides(conn)
+            conn.commit()
+            cx_clear_settings()
+            cx_clear_scores()
+            st.success("Reset to the official 2026 bracket.")
+            st.rerun()
 
     # ---- submission stats ----
     st.divider()

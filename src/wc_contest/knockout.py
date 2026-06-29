@@ -98,7 +98,8 @@ def resolve_bracket(conn, pid) -> dict[str, dict]:
     preds = {p["match_id"]: p for p in conn.execute(
         "SELECT * FROM match_predictions WHERE participant_id=?", (pid,))}
     standings, best8_groups, complete = qualifiers(conn, pid)
-    return _resolve_from(conn, names, preds, standings, best8_groups, complete)
+    return _resolve_from(conn, names, preds, standings, best8_groups, complete,
+                         feeders=effective_feeders(conn))
 
 
 # --------------------------------------------------------------------------- #
@@ -106,7 +107,7 @@ def resolve_bracket(conn, pid) -> dict[str, dict]:
 # pred_advance (a participant's picks OR the actual results shaped the same way).
 # --------------------------------------------------------------------------- #
 def _resolve_from(conn, names, preds, standings, best8_groups, complete,
-                  r32_teams=None):
+                  r32_teams=None, feeders=None):
     bracket = load_bracket()
     alloc = bracket["third_alloc"].get("".join(best8_groups)) if complete else None
 
@@ -132,6 +133,7 @@ def _resolve_from(conn, names, preds, standings, best8_groups, complete,
 
     resolved: dict[int, dict] = {}
     ko_id_map = bracket["ko_id"]
+    koid_to_num = {v: int(k) for k, v in ko_id_map.items()}
 
     def winner_loser(num):
         slot = resolved.get(num)
@@ -170,9 +172,15 @@ def _resolve_from(conn, names, preds, standings, best8_groups, complete,
                 home_label = names.get(home_id) or pos_label(hk, hg_)
                 away_label = names.get(away_id) or pos_label(ak, ag_)
         else:
-            d = bracket["feeders"][str(num)]
-            (hres, hnum) = d["home"]
-            (ares, anum) = d["away"]
+            if feeders is not None and ko_id in feeders:
+                # admin-overridden mapping (sources given as ko_ids)
+                hres, hsrc = feeders[ko_id]["home"]
+                ares, asrc = feeders[ko_id]["away"]
+                hnum, anum = koid_to_num[hsrc], koid_to_num[asrc]
+            else:
+                d = bracket["feeders"][str(num)]
+                (hres, hnum) = d["home"]
+                (ares, anum) = d["away"]
 
             def from_feeder(res, src):
                 w, l = winner_loser(src)
@@ -235,7 +243,8 @@ def actual_bracket(conn) -> dict[str, dict]:
         for g in GROUP_CODES)
     thirds = [standings[g][2] for g in GROUP_CODES if len(standings.get(g, [])) >= 3]
     best8_groups = sorted(t["group"] for t in sorted(thirds, key=_rank_key)[:8])
-    return _resolve_from(conn, names, preds, standings, best8_groups, complete)
+    return _resolve_from(conn, names, preds, standings, best8_groups, complete,
+                         feeders=effective_feeders(conn))
 
 
 # --------------------------------------------------------------------------- #
@@ -259,26 +268,69 @@ def actual_player_bracket(conn, pid) -> dict[str, dict]:
     preds = {p["match_id"]: p for p in conn.execute(
         "SELECT * FROM actual_ko_predictions WHERE participant_id=?", (pid,))}
     return _resolve_from(conn, names, preds, {}, [], False,
-                         r32_teams=real_r32_teams(conn))
+                         r32_teams=real_r32_teams(conn),
+                         feeders=effective_feeders(conn))
 
 
-def feeder_logic() -> dict[str, dict]:
-    """For R16+ slots: {ko_id: {home: 'Winner of <ko_id>', away: ...}} describing
-    where each side comes from. Used by the admin panel (read-only)."""
+# --------------------------------------------------------------------------- #
+# Feeder mapping (which earlier match feeds each R16+ slot). The official 2026
+# bracket is the default; the admin can override any slot's sources, stored in
+# the DB. Sources are expressed as ko_ids so the app can edit them directly.
+# --------------------------------------------------------------------------- #
+def ko_id_order() -> list[str]:
+    """All knockout ko_ids in bracket (match-number) order, R32 → Final."""
+    ko_id_map = load_bracket()["ko_id"]
+    return [ko_id_map[str(n)] for n in range(73, 105)]
+
+
+def default_feeders() -> dict[str, dict]:
+    """Official-bracket sources for each R16+ slot.
+    {ko_id: {'home': (res, src_ko_id), 'away': (res, src_ko_id)}}  res = 'W'|'L'."""
     bracket = load_bracket()
     ko_id_map = bracket["ko_id"]
-
-    def pretty(src_num):
-        return ko_id_map[str(src_num)].replace("KO_", "").replace("_", " ")
-
-    out = {}
+    out: dict[str, dict] = {}
     for num in range(89, 105):
         d = bracket["feeders"][str(num)]
         hres, hnum = d["home"]
         ares, anum = d["away"]
-        word = {"W": "Winner", "L": "Loser"}
         out[ko_id_map[str(num)]] = {
-            "home": f"{word[hres]} of {pretty(hnum)}",
-            "away": f"{word[ares]} of {pretty(anum)}",
+            "home": (hres, ko_id_map[str(hnum)]),
+            "away": (ares, ko_id_map[str(anum)]),
+        }
+    return out
+
+
+def effective_feeders(conn) -> dict[str, dict]:
+    """Default feeders overlaid with any admin overrides stored in the DB."""
+    from . import db as dbmod
+    feeders = default_feeders()
+    for ko_id, o in (dbmod.get_ko_feeder_overrides(conn) or {}).items():
+        if ko_id not in feeders:
+            continue
+        cur = dict(feeders[ko_id])
+        if "home" in o:
+            cur["home"] = (o["home"][0], o["home"][1])
+        if "away" in o:
+            cur["away"] = (o["away"][0], o["away"][1])
+        feeders[ko_id] = cur
+    return feeders
+
+
+def feeder_logic(conn=None) -> dict[str, dict]:
+    """For R16+ slots: {ko_id: {home: 'Winner of <ko_id>', away: ...}} describing
+    where each side comes from. Applies admin overrides when a conn is given."""
+    feeders = effective_feeders(conn) if conn is not None else default_feeders()
+    word = {"W": "Winner", "L": "Loser"}
+
+    def pretty(src_ko_id):
+        return src_ko_id.replace("KO_", "").replace("_", " ")
+
+    out = {}
+    for ko_id, f in feeders.items():
+        hres, hsrc = f["home"]
+        ares, asrc = f["away"]
+        out[ko_id] = {
+            "home": f"{word[hres]} of {pretty(hsrc)}",
+            "away": f"{word[ares]} of {pretty(asrc)}",
         }
     return out
