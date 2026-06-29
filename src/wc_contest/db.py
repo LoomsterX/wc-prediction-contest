@@ -198,11 +198,14 @@ def set_actual_ko_teams(conn, match_id, home_team_id, away_team_id) -> None:
 
 
 def autofill_actual_ko(conn) -> int:
-    """Populate real teams on knockout `matches` rows from the results-derived
-    bracket. Returns how many fixtures now have both teams known."""
+    """Populate the real teams on the Round-of-32 `matches` rows from the actual
+    group results. Only R32 is seeded — later rounds derive from each player's
+    own predicted winners. Returns how many R32 fixtures now have both teams."""
     from . import knockout
     n = 0
     for ko_id, slot in knockout.actual_bracket(conn).items():
+        if not ko_id.startswith("KO_Roundof32_"):
+            continue
         if slot["home_id"] and slot["away_id"]:
             set_actual_ko_teams(conn, ko_id, slot["home_id"], slot["away_id"])
             n += 1

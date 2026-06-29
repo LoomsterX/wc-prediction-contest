@@ -105,7 +105,8 @@ def resolve_bracket(conn, pid) -> dict[str, dict]:
 # Shared resolver. `preds` maps ko_id -> object with pred_home/pred_away/
 # pred_advance (a participant's picks OR the actual results shaped the same way).
 # --------------------------------------------------------------------------- #
-def _resolve_from(conn, names, preds, standings, best8_groups, complete):
+def _resolve_from(conn, names, preds, standings, best8_groups, complete,
+                  r32_teams=None):
     bracket = load_bracket()
     alloc = bracket["third_alloc"].get("".join(best8_groups)) if complete else None
 
@@ -155,13 +156,19 @@ def _resolve_from(conn, names, preds, standings, best8_groups, complete):
     for num in range(73, 105):
         ko_id = ko_id_map[str(num)]
         if 73 <= num <= 88:
-            d = bracket["r32"][str(num)]
-            hk, hg_ = d["home"]
-            ak, ag_ = d["away"]
-            home_id = pos_team(hk, hg_)
-            away_id = pos_team(ak, ag_)
-            home_label = names.get(home_id) or pos_label(hk, hg_)
-            away_label = names.get(away_id) or pos_label(ak, ag_)
+            if r32_teams is not None and ko_id in r32_teams:
+                # R32 seeded from the REAL admin-set fixtures
+                home_id, away_id = r32_teams[ko_id]
+                home_label = names.get(home_id) or "TBD"
+                away_label = names.get(away_id) or "TBD"
+            else:
+                d = bracket["r32"][str(num)]
+                hk, hg_ = d["home"]
+                ak, ag_ = d["away"]
+                home_id = pos_team(hk, hg_)
+                away_id = pos_team(ak, ag_)
+                home_label = names.get(home_id) or pos_label(hk, hg_)
+                away_label = names.get(away_id) or pos_label(ak, ag_)
         else:
             d = bracket["feeders"][str(num)]
             (hres, hnum) = d["home"]
@@ -229,3 +236,49 @@ def actual_bracket(conn) -> dict[str, dict]:
     thirds = [standings[g][2] for g in GROUP_CODES if len(standings.get(g, [])) >= 3]
     best8_groups = sorted(t["group"] for t in sorted(thirds, key=_rank_key)[:8])
     return _resolve_from(conn, names, preds, standings, best8_groups, complete)
+
+
+# --------------------------------------------------------------------------- #
+# Per-player ACTUAL bracket: R32 seeded from the admin-set real fixtures, then
+# R16 → Final derived from THIS player's predicted winners (actual_ko_predictions).
+# --------------------------------------------------------------------------- #
+def real_r32_teams(conn) -> dict[str, tuple]:
+    """{ko_id: (home_id, away_id)} for Round-of-32 fixtures the admin has set."""
+    out = {}
+    for m in conn.execute(
+            "SELECT match_id, home_team_id, away_team_id FROM matches "
+            "WHERE is_knockout=1 AND stage='Round of 32'"):
+        if m["home_team_id"] and m["away_team_id"]:
+            out[m["match_id"]] = (m["home_team_id"], m["away_team_id"])
+    return out
+
+
+def actual_player_bracket(conn, pid) -> dict[str, dict]:
+    names = {r["team_id"]: r["name"]
+             for r in conn.execute("SELECT team_id, name FROM teams")}
+    preds = {p["match_id"]: p for p in conn.execute(
+        "SELECT * FROM actual_ko_predictions WHERE participant_id=?", (pid,))}
+    return _resolve_from(conn, names, preds, {}, [], False,
+                         r32_teams=real_r32_teams(conn))
+
+
+def feeder_logic() -> dict[str, dict]:
+    """For R16+ slots: {ko_id: {home: 'Winner of <ko_id>', away: ...}} describing
+    where each side comes from. Used by the admin panel (read-only)."""
+    bracket = load_bracket()
+    ko_id_map = bracket["ko_id"]
+
+    def pretty(src_num):
+        return ko_id_map[str(src_num)].replace("KO_", "").replace("_", " ")
+
+    out = {}
+    for num in range(89, 105):
+        d = bracket["feeders"][str(num)]
+        hres, hnum = d["home"]
+        ares, anum = d["away"]
+        word = {"W": "Winner", "L": "Loser"}
+        out[ko_id_map[str(num)]] = {
+            "home": f"{word[hres]} of {pretty(hnum)}",
+            "away": f"{word[ares]} of {pretty(anum)}",
+        }
+    return out
