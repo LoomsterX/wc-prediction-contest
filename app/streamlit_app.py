@@ -126,12 +126,32 @@ def cx_leaderboard():
     return scoring.leaderboard_rows(conn)
 
 
+@st.cache_data(ttl=30, show_spinner=False)
+def cx_player_bracket(pid):
+    """A player's derived knockout bracket. Re-derived on every round-button
+    click otherwise (several remote round-trips each time); cache it and clear
+    when the player saves picks or the admin changes fixtures/feeders."""
+    return knockout.actual_player_bracket(conn, pid)
+
+
+@st.cache_data(ttl=30, show_spinner=False)
+def cx_real_r32():
+    """The published Round-of-32 fixtures (shared by all players)."""
+    return knockout.real_r32_teams(conn)
+
+
 def cx_clear_settings():
     cx_settings.clear()
 
 
 def cx_clear_scores():
     cx_leaderboard.clear()
+
+
+def cx_clear_brackets():
+    """Clear derived knockout state after fixtures, feeders or picks change."""
+    cx_player_bracket.clear()
+    cx_real_r32.clear()
 
 
 # convenience views over the cached team list
@@ -1210,7 +1230,7 @@ elif page == "🎯 Match picks":
             SHORT = {"Round of 32": "R32", "Round of 16": "R16",
                      "Quarter-final": "QF", "Semi-final": "SF",
                      "Third place": "3rd", "Final": "Final"}
-            r32 = knockout.real_r32_teams(conn)
+            r32 = cx_real_r32()
             if not r32:
                 st.info(":material/lock: Knockout fixtures aren't published yet — "
                         "they appear once the group stage is done and the organiser "
@@ -1221,9 +1241,9 @@ elif page == "🎯 Match picks":
                             "organiser — viewing only.")
                 st.caption("Predict your **whole** bracket: pick the Round of 32, and "
                            "each later round fills in from the winners you choose.")
-                bracket = knockout.actual_player_bracket(conn, pid)
-                meta = {m["match_id"]: m for m in conn.execute(
-                    "SELECT match_id, stage, kickoff_utc FROM matches WHERE is_knockout=1")}
+                bracket = cx_player_bracket(pid)
+                meta = {m["match_id"]: m for m in cx_matches()
+                        if m["is_knockout"]}
                 stages_avail = ko_stages
                 ss().setdefault("sel_ko", stages_avail[0])
                 if ss().sel_ko not in stages_avail:
@@ -1309,6 +1329,7 @@ elif page == "🎯 Match picks":
                             "submitted_at": dbmod.now_iso(),
                         }, ["participant_id", "match_id"])
                     cx_clear_scores()
+                    cx_clear_brackets()
                     conn.commit()
                     st.success(f"{stage} picks locked in! 🏆")
                     st.rerun()
@@ -1840,6 +1861,7 @@ elif page == "🔐 Admin":
                   use_container_width=True):
         n = dbmod.autofill_actual_ko(conn)
         cx_clear_settings()
+        cx_clear_brackets()
         st.success(f"Set real teams on {n} knockout fixture(s) from the entered "
                    "group results. (Re-run after each round's results are in.)")
         st.rerun()
@@ -1888,6 +1910,7 @@ elif page == "🔐 Admin":
                         dbmod.set_actual_ko_teams(conn, mid, name2id[h], name2id[a])
                         cnt += 1
                 cx_clear_settings()
+                cx_clear_brackets()
                 st.success(f"Saved {cnt} Round-of-32 fixture(s).")
 
     with st.expander("How later rounds are built (R16 → Final)"):
@@ -1913,14 +1936,15 @@ elif page == "🔐 Admin":
             members.setdefault(stage, []).append(kid)
             lbl[kid] = f"{SHORTK.get(stage, stage)} #{len(members[stage])}"
 
+        _names = {t["team_id"]: t["name"] for t in cx_teams()}
+
         def _src_label(kid):
             m = meta2.get(kid, {})
             ids = (m.get("home_team_id"), m.get("away_team_id"))
             tag = ""
             if all(ids):
-                names = {r["team_id"]: r["name"] for r in conn.execute(
-                    "SELECT team_id, name FROM teams")}
-                tag = f" ({flags.code(names.get(ids[0]))}/{flags.code(names.get(ids[1]))})"
+                tag = (f" ({flags.code(_names.get(ids[0]))}"
+                       f"/{flags.code(_names.get(ids[1]))})")
             return lbl.get(kid, kid) + tag
 
         later = [k for k in knockout.ko_id_order()
@@ -1956,6 +1980,7 @@ elif page == "🔐 Admin":
             conn.commit()
             cx_clear_settings()
             cx_clear_scores()
+            cx_clear_brackets()
             st.success("Saved. Every player's R16 → Final now follows these matchups.")
             st.rerun()
         if reset_fd:
@@ -1963,6 +1988,7 @@ elif page == "🔐 Admin":
             conn.commit()
             cx_clear_settings()
             cx_clear_scores()
+            cx_clear_brackets()
             st.success("Reset to the official 2026 bracket.")
             st.rerun()
 
